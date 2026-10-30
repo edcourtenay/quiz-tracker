@@ -1,0 +1,52 @@
+# Normalise line endings on commit; check out native EOLs by default.
+* text=auto
+
+# ---------------------------------------------------------------------------
+# Scripts — must keep their platform line endings
+# ---------------------------------------------------------------------------
+gradlew       text eol=lf
+*.sh          text eol=lf
+gradlew.bat   text eol=crlf
+*.bat         text eol=crlf
+*.cmd         text eol=crlf
+*.ps1         text eol=crlf
+
+# ---------------------------------------------------------------------------
+# Source and configuration (text, normalised)
+# ---------------------------------------------------------------------------
+*.kt          text
+*.kts         text
+*.java        text
+*.xml         text
+*.json        text
+*.md          text
+*.properties  text
+*.pro         text
+*.toml        text
+*.yml         text
+*.yaml        text
+
+# ---------------------------------------------------------------------------
+# Binary — never diff, merge or EOL-convert these
+# ---------------------------------------------------------------------------
+*.jar         binary
+*.png         binary
+*.jpg         binary
+*.jpeg        binary
+*.gif         binary
+*.webp        binary
+*.ico         binary
+*.ttf         binary
+*.otf         binary
+*.woff        binary
+*.woff2       binary
+*.keystore    binary
+*.jks         binary
+*.xlsx        binary
+*.pdf         binary
+
+# Keep the Gradle wrapper out of diffs and language statistics
+gradle/wrapper/gradle-wrapper.jar  binary -diff linguist-vendored
+
+# Room schema exports are generated; collapse them in diffs/reviews
+app/schemas/**                     linguist-generated=true
