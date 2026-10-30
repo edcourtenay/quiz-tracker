@@ -28,52 +28,57 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import uk.co.edcourtenay.quiztracker.data.RoundEntity
 import uk.co.edcourtenay.quiztracker.domain.TeamScore
 import uk.co.edcourtenay.quiztracker.ui.QuizUiState
-import uk.co.edcourtenay.quiztracker.ui.ScoreField
 import uk.co.edcourtenay.quiztracker.ui.formatScore
-
-private enum class Board(val label: String) {
-    Rounds14("Rounds 1-4"),
-    Rounds56("Rounds 5-6"),
-    Wipeout("Wipeout"),
-    Final("Final"),
-}
-
-/** The score field a board's rows map to, or null when the board is derived only. */
-private val Board.editableField: ScoreField?
-    get() = when (this) {
-        Board.Rounds14 -> ScoreField.Rounds1to4
-        Board.Rounds56 -> ScoreField.Rounds5to6
-        Board.Wipeout -> ScoreField.Wipeout
-        Board.Final -> null
-    }
 
 private data class BoardRow(
     val teamId: Long,
     val rank: Int?,
     val name: String,
-    val value: Int?,
+    /** The big number on the right. */
+    val headline: Int?,
+    val headlineIsAlert: Boolean,
     val caption: String,
+    val captionIsAlert: Boolean,
     val isLeader: Boolean,
-    val isZeroWipeout: Boolean,
     /** True when another team shares this rank. */
     val isTied: Boolean = false,
 )
 
+/**
+ * One board per configured round. Each board ranks teams either by the running
+ * total through that round (the default) or by that round's own score — the
+ * first round has no choice to make, since the two are identical there.
+ */
 @Composable
 fun LeaderboardScreen(
     state: QuizUiState,
-    selectedBoardIndex: Int,
-    onBoardIndexChange: (Int) -> Unit,
+    selectedBoardId: Long?,
+    onBoardSelected: (Long) -> Unit,
+    orderByRunningTotal: Boolean,
+    onOrderByRunningTotalChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    onTeamClick: (teamId: Long, field: ScoreField?) -> Unit = { _, _ -> },
+    onTeamClick: (teamId: Long, roundId: Long?) -> Unit = { _, _ -> },
 ) {
-    val boards = Board.entries
-    val selected = selectedBoardIndex.coerceIn(0, boards.lastIndex)
-    val board = boards[selected]
+    val rounds = state.rounds
+    val selectedIndex = rounds.indexOfFirst { it.id == selectedBoardId }.takeIf { it >= 0 } ?: 0
+    val board = rounds.getOrNull(selectedIndex)
 
-    val rows = remember(state.scores, board) { buildRows(board, state.scores) }
+    if (board == null) {
+        Text(
+            text = "No rounds configured yet. Add one in Settings.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = modifier.padding(24.dp),
+        )
+        return
+    }
+
+    val rows = remember(state.scores, board, selectedIndex, orderByRunningTotal) {
+        buildRows(board, selectedIndex, orderByRunningTotal, state.scores)
+    }
 
     Column(modifier = modifier.fillMaxSize()) {
         Row(
@@ -83,11 +88,35 @@ fun LeaderboardScreen(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            boards.forEachIndexed { index, item ->
+            rounds.forEachIndexed { index, round ->
                 FilterChip(
-                    selected = selected == index,
-                    onClick = { onBoardIndexChange(index) },
-                    label = { Text(item.label) },
+                    selected = selectedIndex == index,
+                    onClick = { onBoardSelected(round.id) },
+                    label = { Text(round.name.ifBlank { "Round ${index + 1}" }) },
+                )
+            }
+        }
+
+        if (selectedIndex > 0) {
+            Row(
+                modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Order by",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                FilterChip(
+                    selected = orderByRunningTotal,
+                    onClick = { onOrderByRunningTotalChange(true) },
+                    label = { Text("Running total") },
+                )
+                FilterChip(
+                    selected = !orderByRunningTotal,
+                    onClick = { onOrderByRunningTotalChange(false) },
+                    label = { Text("Round result") },
                 )
             }
         }
@@ -108,7 +137,7 @@ fun LeaderboardScreen(
                 items(rows) { row ->
                     LeaderboardRow(
                         row = row,
-                        onClick = { onTeamClick(row.teamId, board.editableField) },
+                        onClick = { onTeamClick(row.teamId, board.id) },
                     )
                 }
             }
@@ -123,8 +152,8 @@ private fun LeaderboardRow(row: BoardRow, onClick: () -> Unit) {
     } else {
         MaterialTheme.colorScheme.surface
     }
-    val valueColor = when {
-        row.isZeroWipeout -> MaterialTheme.colorScheme.error
+    val headlineColor = when {
+        row.headlineIsAlert -> MaterialTheme.colorScheme.error
         row.isLeader -> MaterialTheme.colorScheme.onPrimaryContainer
         else -> MaterialTheme.colorScheme.onSurface
     }
@@ -180,56 +209,66 @@ private fun LeaderboardRow(row: BoardRow, onClick: () -> Unit) {
                 Text(
                     text = row.caption,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (row.captionIsAlert) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                 )
             }
 
             Text(
-                text = formatScore(row.value),
+                text = formatScore(row.headline),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
-                color = valueColor,
+                color = headlineColor,
             )
         }
     }
 }
 
-private fun buildRows(board: Board, scores: List<TeamScore>): List<BoardRow> {
-    val rows = when (board) {
-        Board.Rounds14 -> scores
-            .filter { it.team.rounds1to4 != null }
-            .sortedWith(compareBy({ it.rankRounds1to4 ?: Int.MAX_VALUE }, { it.team.createdAt }))
-            .map { it.toRow(it.team.rounds1to4, it.rankRounds1to4, "Rounds 1-4") }
+private fun buildRows(
+    round: RoundEntity,
+    roundIndex: Int,
+    orderByRunningTotal: Boolean,
+    scores: List<TeamScore>,
+): List<BoardRow> {
+    // The first round's running total *is* its own score, so the choice is moot.
+    val useRunningTotal = orderByRunningTotal && roundIndex > 0
 
-        Board.Rounds56 -> scores
-            .filter { it.subtotal != null }
-            .sortedWith(compareBy({ it.rankRounds5to6 ?: Int.MAX_VALUE }, { it.team.createdAt }))
-            .map { it.toRow(it.subtotal, it.rankRounds5to6, "Rounds 5-6: ${formatScore(it.team.rounds5to6)}") }
-
-        Board.Wipeout -> scores
-            .filter { it.team.wipeout != null }
-            .sortedWith(compareBy({ it.rankWipeout ?: Int.MAX_VALUE }, { it.team.createdAt }))
-            .map {
-                it.toRow(
-                    value = it.team.wipeout,
-                    rank = it.rankWipeout,
-                    caption = "Subtotal: ${formatScore(it.subtotal)}",
-                    isZeroWipeout = it.team.wipeout == 0,
-                )
-            }
-
-        Board.Final -> scores
-            .filter { it.total != null }
-            .sortedWith(compareBy({ it.rankFinal ?: Int.MAX_VALUE }, { it.team.createdAt }))
-            .map {
-                it.toRow(
-                    value = it.total,
-                    rank = it.rankFinal,
-                    caption = "Subtotal ${formatScore(it.subtotal)} + Wipeout ${formatScore(it.team.wipeout)}",
-                )
-            }
+    val rankOf: (TeamScore) -> Int? = { score ->
+        if (useRunningTotal) score.runningRank(round.id) else score.rank(round.id)
     }
-    return rows.withTieFlags()
+    val included = scores.filter { score ->
+        if (useRunningTotal) score.runningTotal(round.id) != null else score.value(round.id) != null
+    }
+
+    return included
+        .sortedWith(compareBy({ rankOf(it) ?: Int.MAX_VALUE }, { it.team.createdAt }))
+        .map { it.toRow(round, useRunningTotal) }
+        .withTieFlags()
+}
+
+private fun TeamScore.toRow(round: RoundEntity, useRunningTotal: Boolean): BoardRow {
+    val roundValue = value(round.id)
+    val runningTotal = runningTotal(round.id)
+    val rank = if (useRunningTotal) runningRank(round.id) else rank(round.id)
+    val isZeroAlert = round.highlightZero && roundValue == 0
+
+    return BoardRow(
+        teamId = team.id,
+        rank = rank,
+        name = name,
+        headline = if (useRunningTotal) runningTotal else roundValue,
+        headlineIsAlert = !useRunningTotal && isZeroAlert,
+        caption = if (useRunningTotal) {
+            "${round.name.ifBlank { "Round" }}: ${formatScore(roundValue)}"
+        } else {
+            "Total so far: ${formatScore(runningTotal)}"
+        },
+        captionIsAlert = useRunningTotal && isZeroAlert,
+        isLeader = rank == 1,
+    )
 }
 
 /**
@@ -250,18 +289,3 @@ private fun BoardRow.rankLabel(): String = when {
     isTied -> "=$rank"
     else -> rank.toString()
 }
-
-private fun TeamScore.toRow(
-    value: Int?,
-    rank: Int?,
-    caption: String,
-    isZeroWipeout: Boolean = false,
-): BoardRow = BoardRow(
-    teamId = team.id,
-    rank = rank,
-    name = name,
-    value = value,
-    caption = caption,
-    isLeader = rank == 1,
-    isZeroWipeout = isZeroWipeout,
-)

@@ -10,8 +10,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
@@ -19,21 +22,26 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
+import uk.co.edcourtenay.quiztracker.data.RoundEntity
 import uk.co.edcourtenay.quiztracker.export.ResultsExporter
 import uk.co.edcourtenay.quiztracker.ui.QuizUiState
 import uk.co.edcourtenay.quiztracker.ui.QuizViewModel
@@ -51,6 +59,12 @@ fun SettingsScreen(
         onFeeChange = { viewModel.setFeePerPlayer(it) },
         onClearScores = { viewModel.clearAllScores() },
         onDeleteAllTeams = { viewModel.deleteAllTeams() },
+        onAddRound = { viewModel.addRound() },
+        onRenameRound = { round, name -> viewModel.renameRound(round, name) },
+        onMoveRound = { round, offset -> viewModel.moveRound(round, offset) },
+        onToggleRoundHighlightZero = { round, flag -> viewModel.setRoundHighlightZero(round, flag) },
+        onDeleteRound = { viewModel.deleteRound(it) },
+        onCountScoresForRound = { viewModel.countScoresForRound(it) },
         modifier = modifier,
     )
 }
@@ -66,11 +80,19 @@ internal fun SettingsScreenContent(
     onFeeChange: (Double) -> Unit = {},
     onClearScores: () -> Unit = {},
     onDeleteAllTeams: () -> Unit = {},
+    onAddRound: () -> Unit = {},
+    onRenameRound: (RoundEntity, String) -> Unit = { _, _ -> },
+    onMoveRound: (RoundEntity, Int) -> Unit = { _, _ -> },
+    onToggleRoundHighlightZero: (RoundEntity, Boolean) -> Unit = { _, _ -> },
+    onDeleteRound: (RoundEntity) -> Unit = {},
+    onCountScoresForRound: suspend (Long) -> Int = { 0 },
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var confirmClearScores by remember { mutableStateOf(false) }
     var confirmDeleteTeams by remember { mutableStateOf(false) }
+    var pendingRoundDelete by remember { mutableStateOf<Pair<RoundEntity, Int>?>(null) }
 
     Column(
         modifier = modifier
@@ -105,6 +127,52 @@ internal fun SettingsScreenContent(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        }
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text("Rounds", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = "The stages teams are scored on, in play order. " +
+                        "The last round is excluded from the subtotal.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp),
+                )
+
+                state.rounds.forEachIndexed { index, round ->
+                    RoundRow(
+                        round = round,
+                        canMoveUp = index > 0,
+                        canMoveDown = index < state.rounds.lastIndex,
+                        canDelete = state.rounds.size > 1,
+                        onNameChange = { onRenameRound(round, it) },
+                        onMoveUp = { onMoveRound(round, -1) },
+                        onMoveDown = { onMoveRound(round, 1) },
+                        onToggleHighlightZero = { onToggleRoundHighlightZero(round, it) },
+                        onDelete = {
+                            scope.launch {
+                                pendingRoundDelete = round to onCountScoresForRound(round.id)
+                            }
+                        },
+                    )
+                }
+
+                Button(
+                    onClick = onAddRound,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = null)
+                    Text("  Add round")
+                }
             }
         }
 
@@ -168,9 +236,9 @@ internal fun SettingsScreenContent(
                     Text("About", style = MaterialTheme.typography.titleMedium)
                     Text(
                         text = "Quiz Tracker scores a pub quiz night: teams and players, " +
-                            "a per-player entry fee, scores for rounds 1-4 and 5-6, a Wipeout " +
-                            "round, and automatic subtotals, totals, ranks and final positions " +
-                            "with live leaderboards. Data stays on this device.",
+                            "a per-player entry fee, scores for each configured round, and " +
+                            "automatic subtotals, totals, ranks and final positions with " +
+                            "live leaderboards. Data stays on this device.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 4.dp),
@@ -183,7 +251,8 @@ internal fun SettingsScreenContent(
     if (confirmClearScores) {
         ConfirmDialog(
             title = "Clear all scores?",
-            message = "Team names and player counts are kept, but every score will be removed.",
+            message = "Every score will be removed. Team names, player counts and the " +
+                "configured rounds are kept.",
             confirmLabel = "Clear scores",
             onConfirm = {
                 onClearScores()
@@ -196,7 +265,8 @@ internal fun SettingsScreenContent(
     if (confirmDeleteTeams) {
         ConfirmDialog(
             title = "Delete all teams?",
-            message = "This removes every team and all of their scores. This cannot be undone.",
+            message = "This removes every team and their scores. The configured rounds " +
+                "are kept. This cannot be undone.",
             confirmLabel = "Delete teams",
             onConfirm = {
                 onDeleteAllTeams()
@@ -205,6 +275,107 @@ internal fun SettingsScreenContent(
             onDismiss = { confirmDeleteTeams = false },
         )
     }
+
+    pendingRoundDelete?.let { (round, scoreCount) ->
+        ConfirmDialog(
+            title = "Delete \"${round.name.ifBlank { "round" }}\"?",
+            message = if (scoreCount > 0) {
+                "$scoreCount team(s) have a score recorded for this round. Deleting the " +
+                    "round will remove those scores. Teams are not affected."
+            } else {
+                "This round has no scores recorded. Teams are not affected."
+            },
+            confirmLabel = "Delete round",
+            onConfirm = {
+                onDeleteRound(round)
+                pendingRoundDelete = null
+            },
+            onDismiss = { pendingRoundDelete = null },
+        )
+    }
+}
+
+@Composable
+private fun RoundRow(
+    round: RoundEntity,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    canDelete: Boolean,
+    onNameChange: (String) -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    onToggleHighlightZero: (Boolean) -> Unit,
+    onDelete: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onMoveUp, enabled = canMoveUp) {
+                Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Move up")
+            }
+            IconButton(onClick = onMoveDown, enabled = canMoveDown) {
+                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Move down")
+            }
+            RoundNameField(
+                roundId = round.id,
+                initialName = round.name,
+                onNameChange = onNameChange,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = onDelete, enabled = canDelete) {
+                Icon(
+                    Icons.Filled.Delete,
+                    contentDescription = "Delete round",
+                    tint = if (canDelete) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                    },
+                )
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 8.dp, end = 8.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Switch(
+                checked = round.highlightZero,
+                onCheckedChange = onToggleHighlightZero,
+            )
+            Text(
+                text = "  Flag a score of 0 in red",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun RoundNameField(
+    roundId: Long,
+    initialName: String,
+    onNameChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // Local state so the cursor does not jump while Room round-trips.
+    var text by remember(roundId) { mutableStateOf(initialName) }
+
+    OutlinedTextField(
+        value = text,
+        onValueChange = {
+            text = it
+            onNameChange(it)
+        },
+        label = { Text("Round name") },
+        singleLine = true,
+        modifier = modifier,
+    )
 }
 
 @Composable

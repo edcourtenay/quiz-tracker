@@ -3,7 +3,10 @@ package uk.co.edcourtenay.quiztracker.ui.screens
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -42,12 +45,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import uk.co.edcourtenay.quiztracker.data.RoundEntity
 import uk.co.edcourtenay.quiztracker.data.TeamEntity
 import uk.co.edcourtenay.quiztracker.domain.TeamScore
 import uk.co.edcourtenay.quiztracker.ui.QuizUiState
 import uk.co.edcourtenay.quiztracker.ui.QuizViewModel
 import uk.co.edcourtenay.quiztracker.ui.RevealRequest
-import uk.co.edcourtenay.quiztracker.ui.ScoreField
 import uk.co.edcourtenay.quiztracker.ui.components.NumberField
 import uk.co.edcourtenay.quiztracker.ui.components.StatTile
 import uk.co.edcourtenay.quiztracker.ui.components.ValueChip
@@ -74,6 +77,7 @@ fun TeamsScreen(
         onAddTeam = { viewModel.addTeam() },
         onUpdateTeam = { viewModel.updateTeam(it) },
         onDeleteTeam = { viewModel.deleteTeam(it) },
+        onScoreChange = { teamId, roundId, value -> viewModel.setScore(teamId, roundId, value) },
         modifier = modifier,
     )
 }
@@ -92,6 +96,7 @@ internal fun TeamsScreenContent(
     onAddTeam: () -> Unit = {},
     onUpdateTeam: (TeamEntity) -> Unit = {},
     onDeleteTeam: (TeamEntity) -> Unit = {},
+    onScoreChange: (teamId: Long, roundId: Long, value: Int?) -> Unit = { _, _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -135,15 +140,14 @@ internal fun TeamsScreenContent(
                 val reveal = revealRequest?.takeIf { it.teamId == score.team.id }
                 TeamCard(
                     score = score,
+                    rounds = state.rounds,
                     requestNameFocus = focusTeamId == score.team.id,
                     isRevealed = reveal != null,
-                    focusField = reveal?.field,
+                    focusRoundId = reveal?.roundId,
                     onNameFocusHandled = onFocusHandled,
                     onNameChange = { onUpdateTeam(score.team.copy(name = it)) },
                     onPlayersChange = { onUpdateTeam(score.team.copy(players = it)) },
-                    onRounds1to4Change = { onUpdateTeam(score.team.copy(rounds1to4 = it)) },
-                    onRounds5to6Change = { onUpdateTeam(score.team.copy(rounds5to6 = it)) },
-                    onWipeoutChange = { onUpdateTeam(score.team.copy(wipeout = it)) },
+                    onScoreChange = { roundId, value -> onScoreChange(score.team.id, roundId, value) },
                     onDelete = { onDeleteTeam(score.team) },
                 )
             }
@@ -162,6 +166,9 @@ internal fun TeamsScreenContent(
 
 /** How long a team stays highlighted after being revealed from a board. */
 private const val REVEAL_HIGHLIGHT_MILLIS = 2_500L
+
+/** How many score fields sit on a line before wrapping. */
+private const val SCORE_FIELDS_PER_ROW = 2
 
 @Composable
 internal fun SummaryCard(state: QuizUiState) {
@@ -195,18 +202,18 @@ private fun EmptyHint() {
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun TeamCard(
     score: TeamScore,
+    rounds: List<RoundEntity>,
     requestNameFocus: Boolean,
     isRevealed: Boolean,
-    focusField: ScoreField?,
+    focusRoundId: Long?,
     onNameFocusHandled: () -> Unit,
     onNameChange: (String) -> Unit,
     onPlayersChange: (Int?) -> Unit,
-    onRounds1to4Change: (Int?) -> Unit,
-    onRounds5to6Change: (Int?) -> Unit,
-    onWipeoutChange: (Int?) -> Unit,
+    onScoreChange: (roundId: Long, value: Int?) -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -250,32 +257,36 @@ internal fun TeamCard(
                 amount = score.amount,
             )
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                NumberField(
-                    value = team.rounds1to4,
-                    label = "Rounds 1-4",
-                    onValueChange = onRounds1to4Change,
-                    requestFocus = focusField == ScoreField.Rounds1to4,
-                    modifier = Modifier.weight(1f),
-                )
-                NumberField(
-                    value = team.rounds5to6,
-                    label = "Rounds 5-6",
-                    onValueChange = onRounds5to6Change,
-                    requestFocus = focusField == ScoreField.Rounds5to6,
-                    modifier = Modifier.weight(1f),
-                )
-                NumberField(
-                    value = team.wipeout,
-                    label = "Wipeout",
-                    onValueChange = onWipeoutChange,
-                    requestFocus = focusField == ScoreField.Wipeout,
-                    modifier = Modifier.weight(1f),
-                )
+            // OutlinedTextField enforces a 280dp minimum width, which defeats weight()
+            // during FlowRow's line breaking, so size the fields from the space
+            // available. Dividing and then taking a whole spacing off keeps two fields
+            // comfortably inside the line instead of rounding one pixel over it.
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val spacing = 8.dp
+                val itemWidth = maxWidth / SCORE_FIELDS_PER_ROW - spacing
+
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(spacing),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    maxItemsInEachRow = SCORE_FIELDS_PER_ROW,
+                ) {
+                    rounds.forEach { round ->
+                        NumberField(
+                            value = score.value(round.id),
+                            label = round.name.ifBlank { "Round" },
+                            onValueChange = { onScoreChange(round.id, it) },
+                            requestFocus = focusRoundId == round.id,
+                            modifier = Modifier.width(itemWidth),
+                        )
+                    }
+                }
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ValueChip("Subtotal", formatScore(score.subtotal), Modifier.weight(1f))
+                if (rounds.size >= 2) {
+                    ValueChip("Subtotal", formatScore(score.subtotal), Modifier.weight(1f))
+                }
                 ValueChip("Total", formatScore(score.total), Modifier.weight(1f))
                 ValueChip("Position", formatPosition(score.rankFinal), Modifier.weight(1f))
             }

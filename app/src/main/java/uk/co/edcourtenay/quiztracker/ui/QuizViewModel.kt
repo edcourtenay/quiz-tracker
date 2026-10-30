@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import uk.co.edcourtenay.quiztracker.QuizTrackerApp
 import uk.co.edcourtenay.quiztracker.data.ConfigEntity
 import uk.co.edcourtenay.quiztracker.data.QuizRepository
+import uk.co.edcourtenay.quiztracker.data.RoundEntity
 import uk.co.edcourtenay.quiztracker.data.TeamEntity
 import uk.co.edcourtenay.quiztracker.domain.Scoring
 import uk.co.edcourtenay.quiztracker.domain.TeamScore
@@ -21,6 +22,7 @@ import kotlinx.coroutines.launch
 
 data class QuizUiState(
     val teams: List<TeamEntity> = emptyList(),
+    val rounds: List<RoundEntity> = emptyList(),
     val scores: List<TeamScore> = emptyList(),
     val config: ConfigEntity = ConfigEntity.Default,
 ) {
@@ -32,17 +34,23 @@ data class QuizUiState(
 /** A one-shot request to reveal a team on the Scores screen. */
 data class RevealRequest(
     val teamId: Long,
-    /** Which score field to focus, or null when the board has no editable value. */
-    val field: ScoreField?,
+    /** Which round's field to focus, or null when the board has no editable value. */
+    val roundId: Long?,
 )
 
 class QuizViewModel(private val repository: QuizRepository) : ViewModel() {
 
     val uiState: StateFlow<QuizUiState> =
-        combine(repository.teams, repository.config) { teams, config ->
+        combine(
+            repository.teams,
+            repository.rounds,
+            repository.scores,
+            repository.config,
+        ) { teams, rounds, scoreRows, config ->
             QuizUiState(
                 teams = teams,
-                scores = Scoring.scoreTeams(teams, config.feePerPlayer),
+                rounds = rounds,
+                scores = Scoring.scoreTeams(teams, rounds, scoreRows, config.feePerPlayer),
                 config = config,
             )
         }.stateIn(
@@ -50,6 +58,10 @@ class QuizViewModel(private val repository: QuizRepository) : ViewModel() {
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = QuizUiState(),
         )
+
+    // ---------------------------------------------------------------------
+    // Teams
+    // ---------------------------------------------------------------------
 
     private val _focusTeamId = MutableStateFlow<Long?>(null)
 
@@ -69,6 +81,23 @@ class QuizViewModel(private val repository: QuizRepository) : ViewModel() {
         _focusTeamId.value = null
     }
 
+    fun updateTeam(team: TeamEntity) = viewModelScope.launch {
+        repository.updateTeam(team)
+    }
+
+    fun deleteTeam(team: TeamEntity) = viewModelScope.launch {
+        repository.deleteTeam(team)
+    }
+
+    /** Removes every team and their scores. The configured rounds are kept. */
+    fun deleteAllTeams() = viewModelScope.launch {
+        repository.deleteAllTeams()
+    }
+
+    // ---------------------------------------------------------------------
+    // Reveal (from a leaderboard row)
+    // ---------------------------------------------------------------------
+
     private val _revealRequest = MutableStateFlow<RevealRequest?>(null)
 
     /**
@@ -78,11 +107,11 @@ class QuizViewModel(private val repository: QuizRepository) : ViewModel() {
     val revealRequest: StateFlow<RevealRequest?> = _revealRequest.asStateFlow()
 
     /**
-     * Ask the Scores screen to bring [teamId] into view, focusing [field] for
-     * input when the originating board has an editable score.
+     * Ask the Scores screen to bring [teamId] into view, focusing [roundId]'s
+     * field for input when the originating board has an editable score.
      */
-    fun revealTeam(teamId: Long, field: ScoreField? = null) {
-        _revealRequest.value = RevealRequest(teamId = teamId, field = field)
+    fun revealTeam(teamId: Long, roundId: Long? = null) {
+        _revealRequest.value = RevealRequest(teamId = teamId, roundId = roundId)
     }
 
     /** Called by the UI once the team has been revealed. */
@@ -90,21 +119,51 @@ class QuizViewModel(private val repository: QuizRepository) : ViewModel() {
         _revealRequest.value = null
     }
 
-    fun updateTeam(team: TeamEntity) = viewModelScope.launch {
-        repository.updateTeam(team)
+    // ---------------------------------------------------------------------
+    // Rounds
+    // ---------------------------------------------------------------------
+
+    fun addRound() = viewModelScope.launch {
+        val position = uiState.value.rounds.size + 1
+        repository.addRound(name = "Round $position")
     }
 
-    fun deleteTeam(team: TeamEntity) = viewModelScope.launch {
-        repository.deleteTeam(team)
+    fun renameRound(round: RoundEntity, name: String) = viewModelScope.launch {
+        repository.renameRound(round, name)
     }
 
-    fun deleteAllTeams() = viewModelScope.launch {
-        repository.deleteAllTeams()
+    fun setRoundHighlightZero(round: RoundEntity, highlightZero: Boolean) = viewModelScope.launch {
+        repository.setRoundHighlightZero(round, highlightZero)
     }
 
+    /** Moves a round one place earlier (offset -1) or later (offset +1). */
+    fun moveRound(round: RoundEntity, offset: Int) = viewModelScope.launch {
+        repository.moveRound(round, offset)
+    }
+
+    fun deleteRound(round: RoundEntity) = viewModelScope.launch {
+        repository.deleteRound(round)
+    }
+
+    /** How many teams have a score recorded for a round. */
+    suspend fun countScoresForRound(roundId: Long): Int = repository.countScoresForRound(roundId)
+
+    // ---------------------------------------------------------------------
+    // Scores
+    // ---------------------------------------------------------------------
+
+    fun setScore(teamId: Long, roundId: Long, value: Int?) = viewModelScope.launch {
+        repository.setScore(teamId, roundId, value)
+    }
+
+    /** Clears every entered score. Teams and rounds are kept. */
     fun clearAllScores() = viewModelScope.launch {
         repository.clearAllScores()
     }
+
+    // ---------------------------------------------------------------------
+    // Config
+    // ---------------------------------------------------------------------
 
     fun setFeePerPlayer(fee: Double) = viewModelScope.launch {
         repository.saveConfig(uiState.value.config.copy(feePerPlayer = fee))

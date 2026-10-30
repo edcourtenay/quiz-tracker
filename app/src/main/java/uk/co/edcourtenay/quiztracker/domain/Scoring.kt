@@ -1,65 +1,109 @@
 package uk.co.edcourtenay.quiztracker.domain
 
+import uk.co.edcourtenay.quiztracker.data.RoundEntity
+import uk.co.edcourtenay.quiztracker.data.ScoreEntity
 import uk.co.edcourtenay.quiztracker.data.TeamEntity
 
 /**
- * A team plus every value the workbook derives for it.
+ * A team plus every value the workbook derives for it, generalised to any number
+ * of configurable rounds.
  *
- * The formulas below are a faithful port of the "Scores" sheet:
+ * The original sheet's formulas map onto this as follows (for the default three
+ * rounds "Rounds 1-4", "Rounds 5-6", "Wipeout"):
  *
- *  - Amount   : `=if(B2, 2*B2, "")`            -> fee x players, blank when no players
- *  - Subtotal : `=IF(F2, D2+F2, "")`           -> rounds1-4 + rounds5-6, blank until rounds 5-6 entered
- *  - Total    : `=if(I2<>"", I2+G2, "")`       -> subtotal + wipeout, blank until wipeout entered
- *  - Ranks    : `=Rank(value, column)`         -> Excel RANK.EQ (ties share a rank, next rank is skipped)
+ *  - Amount        : `=if(B2, 2*B2, "")`      -> fee x players, blank when no players
+ *  - Round value   : columns D, F, I          -> the score entered for that round
+ *  - Running total : column G, then J         -> sum of rounds 0..i, blank until every
+ *                                                one of those rounds has a score
+ *  - Subtotal      : `=IF(F2, D2+F2, "")`     -> the running total after the *penultimate*
+ *                                                round, blank when there is only one round
+ *  - Total         : `=if(I2<>"", I2+G2, "")` -> the running total after the last round
+ *  - Ranks         : `=Rank(value, column)`   -> Excel RANK.EQ (ties share a rank, the
+ *                                                next rank is skipped)
+ *
+ * A running total is deliberately stricter than the sheet, which silently treats a
+ * missing earlier round as 0. Here it stays blank until every round up to that
+ * point has been entered, so a team that has not played an earlier round is not
+ * ranked as though it scored nothing.
  */
 data class TeamScore(
     val team: TeamEntity,
     val amount: Double?,
+    /** roundId -> entered score. Absent means "not entered". */
+    val values: Map<Long, Int>,
+    /** roundId -> rank by that round's own score. */
+    val ranks: Map<Long, Int?>,
+    /** roundId -> running total through that round, or null while incomplete. */
+    val runningTotals: Map<Long, Int?>,
+    /** roundId -> rank by the running total through that round. */
+    val runningRanks: Map<Long, Int?>,
     val subtotal: Int?,
     val total: Int?,
-    val rankRounds1to4: Int?,
-    val rankRounds5to6: Int?,
-    val rankWipeout: Int?,
     val rankFinal: Int?,
 ) {
     val name: String get() = team.name.ifBlank { "Unnamed team" }
+
+    fun value(roundId: Long): Int? = values[roundId]
+
+    fun rank(roundId: Long): Int? = ranks[roundId]
+
+    fun runningTotal(roundId: Long): Int? = runningTotals[roundId]
+
+    fun runningRank(roundId: Long): Int? = runningRanks[roundId]
 }
 
 object Scoring {
 
-    fun scoreTeams(teams: List<TeamEntity>, feePerPlayer: Double): List<TeamScore> {
-        val subtotals: Map<Long, Int?> = teams.associate { team ->
-            team.id to if (team.rounds5to6 != null) {
-                (team.rounds1to4 ?: 0) + team.rounds5to6
-            } else {
-                null
+    fun scoreTeams(
+        teams: List<TeamEntity>,
+        rounds: List<RoundEntity>,
+        scores: List<ScoreEntity>,
+        feePerPlayer: Double,
+    ): List<TeamScore> {
+        val valuesByTeam: Map<Long, Map<Long, Int>> = scores
+            .groupBy { it.teamId }
+            .mapValues { (_, rows) -> rows.associate { it.roundId to it.value } }
+
+        // Running total through each round; null from the first missing round onwards.
+        val runningTotals: Map<Long, Map<Long, Int?>> = teams.associate { team ->
+            val values = valuesByTeam[team.id].orEmpty()
+            var running = 0
+            var complete = true
+            val totals = LinkedHashMap<Long, Int?>(rounds.size)
+            for (round in rounds) {
+                val value = values[round.id]
+                if (value == null) {
+                    complete = false
+                } else {
+                    running += value
+                }
+                totals[round.id] = if (complete) running else null
             }
+            team.id to totals
         }
 
-        val totals: Map<Long, Int?> = teams.associate { team ->
-            val subtotal = subtotals[team.id]
-            team.id to if (team.wipeout != null && subtotal != null) {
-                subtotal + team.wipeout
-            } else {
-                null
-            }
+        val ranksByRound: Map<Long, Map<Long, Int?>> = rounds.associate { round ->
+            round.id to ranks(teams.associate { it.id to valuesByTeam[it.id]?.get(round.id) })
         }
 
-        val rankRounds1to4 = ranks(teams.associate { it.id to it.rounds1to4 })
-        val rankRounds5to6 = ranks(subtotals)
-        val rankWipeout = ranks(teams.associate { it.id to it.wipeout })
-        val rankFinal = ranks(totals)
+        val runningRanksByRound: Map<Long, Map<Long, Int?>> = rounds.associate { round ->
+            round.id to ranks(teams.associate { it.id to runningTotals[it.id]?.get(round.id) })
+        }
+
+        val penultimateRoundId = rounds.getOrNull(rounds.size - 2)?.id
+        val lastRoundId = rounds.lastOrNull()?.id
 
         return teams.map { team ->
             TeamScore(
                 team = team,
                 amount = team.players?.let { it * feePerPlayer },
-                subtotal = subtotals[team.id],
-                total = totals[team.id],
-                rankRounds1to4 = rankRounds1to4[team.id],
-                rankRounds5to6 = rankRounds5to6[team.id],
-                rankWipeout = rankWipeout[team.id],
-                rankFinal = rankFinal[team.id],
+                values = valuesByTeam[team.id].orEmpty(),
+                ranks = rounds.associate { it.id to ranksByRound.getValue(it.id)[team.id] },
+                runningTotals = runningTotals[team.id].orEmpty(),
+                runningRanks = rounds.associate { it.id to runningRanksByRound.getValue(it.id)[team.id] },
+                subtotal = penultimateRoundId?.let { runningTotals[team.id]?.get(it) },
+                total = lastRoundId?.let { runningTotals[team.id]?.get(it) },
+                rankFinal = lastRoundId?.let { runningRanksByRound.getValue(it)[team.id] },
             )
         }
     }

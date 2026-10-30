@@ -70,39 +70,65 @@ Each is a `SORT()` of the `Scores` table:
 
 ### Screens
 
-- **Scores** — add teams, set player counts (with a stepper), enter Rounds 1-4,
-  Rounds 5-6 and Wipeout. Each card shows the live Subtotal, Total and Position,
-  plus the per-team fee. A summary strip shows **Teams / Players / Funds**.
-- **Board** — switch between the four leaderboards (Rounds 1-4, Rounds 5-6,
-  Wipeout, Final). The leader row is green, the best value is highlighted, and a
-  Wipeout of 0 is shown in red — mirroring the sheet's conditional formatting.
-  When teams share a rank the badge is prefixed with `=` (e.g. `=2`), the usual
-  convention for a tie. Tapping a row jumps to that team on the Scores screen,
-  scrolled into view and briefly outlined, with the matching score focused for
-  input and its current value selected (the Final board has no single editable
-  value, so nothing is focused there). The board you were viewing is remembered
-  when you navigate away and back.
-- **Settings** — quiz name, entry fee per player, share results as CSV, clear all
-  scores (keeps teams), delete all teams, and an About panel.
+- **Scores** — add teams, set player counts (with a stepper), and enter a score
+  for each configured round (laid out in a wrapping grid). Each card shows the
+  live Subtotal, Total and Position, plus the per-team fee. A summary strip shows
+  **Teams / Players / Funds**.
+- **Board** — one leaderboard per configured round. The leader row is green and a
+  score of `0` in a round flagged *"flag a score of 0 in red"* is shown in red —
+  mirroring the sheet's conditional formatting. When teams share a rank the badge
+  is prefixed with `=` (e.g. `=2`), the usual convention for a tie. Every board
+  except the first can be **ordered by the running total through that round (the
+  default) or by that round's own result**; the headline number always matches the
+  ordering, and the round's own score stays visible (and red) in the caption when
+  ordering by running total. Tapping a row jumps to that team on the Scores
+  screen, scrolled into view and briefly outlined, with the matching score focused
+  for input and its current value selected. The board you were viewing is
+  remembered when you navigate away and back.
+- **Settings** — quiz name, entry fee per player, the **rounds editor** (add,
+  rename, reorder with ↑/↓, toggle the red-zero flag, and delete), share results
+  as CSV, clear all scores, delete all teams, and an About panel.
+
+### Rounds
+
+The rounds are **fully configurable** — the three the app shipped with
+("Rounds 1-4", "Rounds 5-6", "Wipeout") are simply the default seed. Each round
+has a name, a position and a `highlightZero` flag.
+
+Two rules hold the model together:
+
+- **The last round by position is excluded from the Subtotal.** With the default
+  three rounds that reproduces the sheet exactly (Subtotal = rounds 1-4 + 5-6,
+  Total = Subtotal + Wipeout).
+- **A running total appears only once every round up to that point has a score.**
+  This is deliberately stricter than the sheet, which silently treats a missing
+  earlier round as `0` — a team that has not played round 1 should not be ranked
+  as though it scored nothing.
+
+Deleting a round warns you when teams have scores recorded for it, but proceeds
+once confirmed. Deleting **all teams** removes their scores and leaves the
+configured rounds untouched (the two foreign keys cascade in opposite directions
+and never cross).
 
 ### Score engine
 
-`domain/Scoring.kt` is a faithful port of the sheet formulas:
+`domain/Scoring.kt` generalises the sheet formulas to any number of rounds:
 
 - `Amount = fee × players`
-- `Subtotal = rounds1to4 + rounds5to6` (blank until rounds 5-6 are entered)
-- `Total = subtotal + wipeout` (blank until wipeout is entered)
+- `Subtotal` = running total after the **penultimate** round (blank with one round)
+- `Total` = running total after the last round
 - Ranks use **Excel `RANK.EQ`** semantics: ties share a rank and the next rank is
   skipped (1, 2, 2, 4). Blank scores are unranked.
 
-An empty field means "not entered" (a blank cell), which is deliberately
-different from an entered score of `0` — the Wipeout red-flag depends on it.
+An absent score means "not entered" (a blank cell), which is deliberately
+different from an entered score of `0` — the red-zero flag depends on it.
 
 ### Export
 
-`export/ResultsExporter.kt` writes a CSV with the same columns as the `Scores`
-sheet (plus generated timestamp and totals) and shares it via the system share
-sheet (through a `FileProvider`).
+`export/ResultsExporter.kt` writes a CSV with one score and rank column per
+configured round, plus Subtotal (when there is more than one round), Total and
+Final Position, and shares it via the system share sheet (through a
+`FileProvider`).
 
 ---
 
@@ -130,16 +156,17 @@ composable that takes plain state plus callbacks. The stateless ones are what th
 |---|---|
 | `TeamsScreen(state, viewModel)` | `TeamsScreenContent(state, …)` |
 | `SettingsScreen(state, viewModel)` | `SettingsScreenContent(state, …)` |
-| `LeaderboardScreen(state)` | same composable, `initialBoardIndex = 0..3` |
+| `LeaderboardScreen(state, …)` | same composable, `selectedBoardId` + `orderByRunningTotal` |
 
 The previews live in `app/src/debug/` so they are compiled into the debug variant
 only and never ship in release (verified: zero preview classes in the release
 build). Sample data is centralised in `PreviewData`, so adding a new preview is
 just a matter of pointing it at `PreviewData.state()`.
 
-Previewed today: Scores (empty / populated / dark), each of the four boards,
-Settings, and the summary and team cards as individual components. Open any file
-under `app/src/debug/.../ui/previews/` and use the **Split** or **Design** view in
+Previewed today: Scores (empty / populated / dark / revealed team), the board in
+both ordering modes, a tied board, Settings (including the rounds editor), and the
+summary and team cards as individual components. Open any file under
+`app/src/debug/.../ui/previews/` and use the **Split** or **Design** view in
 Android Studio.
 
 ---

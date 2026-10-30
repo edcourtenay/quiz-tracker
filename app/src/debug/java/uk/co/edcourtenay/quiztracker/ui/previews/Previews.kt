@@ -12,7 +12,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import uk.co.edcourtenay.quiztracker.ui.RevealRequest
-import uk.co.edcourtenay.quiztracker.ui.ScoreField
 import uk.co.edcourtenay.quiztracker.ui.components.NumberField
 import uk.co.edcourtenay.quiztracker.ui.components.StatTile
 import uk.co.edcourtenay.quiztracker.ui.components.ValueChip
@@ -35,7 +34,7 @@ private fun ScoresEmptyPreview() {
     }
 }
 
-@Preview(name = "Scores – with teams", showBackground = true, heightDp = 1100)
+@Preview(name = "Scores – with teams", showBackground = true, heightDp = 1400)
 @Composable
 private fun ScoresPreview() {
     QuizTrackerTheme {
@@ -43,22 +42,10 @@ private fun ScoresPreview() {
     }
 }
 
-@Preview(name = "Scores – revealed team", showBackground = true, heightDp = 1100)
-@Composable
-private fun ScoresRevealedPreview() {
-    QuizTrackerTheme {
-        // Mirrors tapping "Groovy Gang" on the Wipeout board.
-        TeamsScreenContent(
-            state = PreviewData.state(),
-            revealRequest = RevealRequest(teamId = 4, field = ScoreField.Wipeout),
-        )
-    }
-}
-
 @Preview(
     name = "Scores – dark",
     showBackground = true,
-    heightDp = 1100,
+    heightDp = 1400,
     uiMode = Configuration.UI_MODE_NIGHT_YES,
 )
 @Composable
@@ -68,55 +55,89 @@ private fun ScoresDarkPreview() {
     }
 }
 
+@Preview(name = "Scores – revealed team", showBackground = true, heightDp = 1400)
+@Composable
+private fun ScoresRevealedPreview() {
+    QuizTrackerTheme {
+        // Mirrors tapping "Groovy Gang" on the Wipeout board.
+        TeamsScreenContent(
+            state = PreviewData.state(),
+            revealRequest = RevealRequest(teamId = 4, roundId = 3),
+        )
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Leaderboard screen – one preview per board
 // ---------------------------------------------------------------------------
 
-@Preview(name = "Board – Rounds 1-4", showBackground = true, heightDp = 700)
+@Preview(name = "Board – round 1 (running total)", showBackground = true, heightDp = 700)
 @Composable
-private fun BoardRounds1to4Preview() {
+private fun BoardFirstPreview() {
     QuizTrackerTheme {
-        LeaderboardScreen(state = PreviewData.state(), selectedBoardIndex = 0, onBoardIndexChange = {})
+        LeaderboardScreen(
+            state = PreviewData.state(),
+            selectedBoardId = PreviewData.rounds[0].id,
+            onBoardSelected = {},
+            orderByRunningTotal = true,
+            onOrderByRunningTotalChange = {},
+        )
     }
 }
 
-@Preview(name = "Board – Rounds 5-6", showBackground = true, heightDp = 700)
+@Preview(name = "Board – running total", showBackground = true, heightDp = 760)
 @Composable
-private fun BoardRounds5to6Preview() {
+private fun BoardRunningTotalPreview() {
     QuizTrackerTheme {
-        LeaderboardScreen(state = PreviewData.state(), selectedBoardIndex = 1, onBoardIndexChange = {})
+        LeaderboardScreen(
+            state = PreviewData.state(),
+            selectedBoardId = PreviewData.rounds[1].id,
+            onBoardSelected = {},
+            orderByRunningTotal = true,
+            onOrderByRunningTotalChange = {},
+        )
     }
 }
 
-@Preview(name = "Board – Wipeout", showBackground = true, heightDp = 700)
+@Preview(name = "Board – round result", showBackground = true, heightDp = 760)
+@Composable
+private fun BoardRoundResultPreview() {
+    QuizTrackerTheme {
+        LeaderboardScreen(
+            state = PreviewData.state(),
+            selectedBoardId = PreviewData.rounds[1].id,
+            onBoardSelected = {},
+            orderByRunningTotal = false,
+            onOrderByRunningTotalChange = {},
+        )
+    }
+}
+
+@Preview(name = "Board – wipeout (zero flagged)", showBackground = true, heightDp = 760)
 @Composable
 private fun BoardWipeoutPreview() {
     QuizTrackerTheme {
-        LeaderboardScreen(state = PreviewData.state(), selectedBoardIndex = 2, onBoardIndexChange = {})
+        LeaderboardScreen(
+            state = PreviewData.state(),
+            selectedBoardId = PreviewData.rounds[2].id,
+            onBoardSelected = {},
+            orderByRunningTotal = true,
+            onOrderByRunningTotalChange = {},
+        )
     }
 }
 
-@Preview(name = "Board – Final", showBackground = true, heightDp = 700)
+@Preview(name = "Board – tied ranks", showBackground = true, heightDp = 760)
 @Composable
-private fun BoardFinalPreview() {
+private fun BoardTiedPreview() {
     QuizTrackerTheme {
-        LeaderboardScreen(state = PreviewData.state(), selectedBoardIndex = 3, onBoardIndexChange = {})
-    }
-}
-
-@Preview(name = "Board – tied ranks (Rounds 1-4)", showBackground = true, heightDp = 700)
-@Composable
-private fun BoardTiedRounds14Preview() {
-    QuizTrackerTheme {
-        LeaderboardScreen(state = PreviewData.tiedState, selectedBoardIndex = 0, onBoardIndexChange = {})
-    }
-}
-
-@Preview(name = "Board – tied ranks (Final)", showBackground = true, heightDp = 700)
-@Composable
-private fun BoardTiedFinalPreview() {
-    QuizTrackerTheme {
-        LeaderboardScreen(state = PreviewData.tiedState, selectedBoardIndex = 3, onBoardIndexChange = {})
+        LeaderboardScreen(
+            state = PreviewData.tiedState,
+            selectedBoardId = PreviewData.rounds[1].id,
+            onBoardSelected = {},
+            orderByRunningTotal = true,
+            onOrderByRunningTotalChange = {},
+        )
     }
 }
 
@@ -124,7 +145,7 @@ private fun BoardTiedFinalPreview() {
 // Settings screen
 // ---------------------------------------------------------------------------
 
-@Preview(name = "Settings", showBackground = true, heightDp = 1200)
+@Preview(name = "Settings", showBackground = true, heightDp = 1600)
 @Composable
 private fun SettingsPreview() {
     QuizTrackerTheme {
@@ -146,22 +167,21 @@ private fun SummaryCardPreview() {
     }
 }
 
-@Preview(name = "Component – team card", showBackground = true, widthDp = 380, heightDp = 320)
+@Preview(name = "Component – team card", showBackground = true, widthDp = 380, heightDp = 420)
 @Composable
 private fun TeamCardPreview() {
     QuizTrackerTheme {
         Surface {
             TeamCard(
                 score = PreviewData.state().scores.first(),
+                rounds = PreviewData.rounds,
                 requestNameFocus = false,
                 isRevealed = false,
-                focusField = null,
+                focusRoundId = null,
                 onNameFocusHandled = {},
                 onNameChange = {},
                 onPlayersChange = {},
-                onRounds1to4Change = {},
-                onRounds5to6Change = {},
-                onWipeoutChange = {},
+                onScoreChange = { _, _ -> },
                 onDelete = {},
                 modifier = Modifier.padding(12.dp),
             )

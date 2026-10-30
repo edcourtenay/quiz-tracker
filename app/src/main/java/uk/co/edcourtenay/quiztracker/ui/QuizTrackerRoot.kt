@@ -16,6 +16,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -41,7 +42,8 @@ fun QuizTrackerRoot(
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     // Remembered here (not inside LeaderboardScreen) so the chosen board survives
     // switching tabs — e.g. tapping a row to jump to Scores and coming back.
-    var boardIndex by rememberSaveable { mutableIntStateOf(0) }
+    var boardRoundId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var orderByRunningTotal by rememberSaveable { mutableStateOf(true) }
     val tabs = Tab.entries
 
     Scaffold(
@@ -66,12 +68,14 @@ fun QuizTrackerRoot(
                 Tab.Scores -> TeamsScreen(state = state, viewModel = viewModel)
                 Tab.Leaderboard -> LeaderboardScreen(
                     state = state,
-                    selectedBoardIndex = boardIndex,
-                    onBoardIndexChange = { boardIndex = it },
-                    onTeamClick = { teamId, field ->
+                    selectedBoardId = boardRoundId,
+                    onBoardSelected = { boardRoundId = it },
+                    orderByRunningTotal = orderByRunningTotal,
+                    onOrderByRunningTotalChange = { orderByRunningTotal = it },
+                    onTeamClick = { teamId, roundId ->
                         // Jump to the Scores screen with that team brought into
                         // view and the matching score focused for input.
-                        viewModel.revealTeam(teamId, field)
+                        viewModel.revealTeam(teamId, roundId)
                         selectedTab = Tab.Scores.ordinal
                     },
                 )

@@ -1,5 +1,7 @@
 package uk.co.edcourtenay.quiztracker.domain
 
+import uk.co.edcourtenay.quiztracker.data.RoundEntity
+import uk.co.edcourtenay.quiztracker.data.ScoreEntity
 import uk.co.edcourtenay.quiztracker.data.TeamEntity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -7,71 +9,100 @@ import org.junit.Test
 
 class ScoringTest {
 
-    private var nextId = 1L
+    private var nextTeamId = 1L
 
-    private fun team(
-        name: String,
-        players: Int? = null,
-        rounds1to4: Int? = null,
-        rounds5to6: Int? = null,
-        wipeout: Int? = null,
-    ) = TeamEntity(
-        id = nextId++,
+    /** The three rounds the app used to hard-code. */
+    private val rounds = listOf(
+        RoundEntity(id = 1, name = "Rounds 1-4", position = 0),
+        RoundEntity(id = 2, name = "Rounds 5-6", position = 1),
+        RoundEntity(id = 3, name = "Wipeout", position = 2, highlightZero = true),
+    )
+
+    private fun team(name: String, players: Int? = null) = TeamEntity(
+        id = nextTeamId++,
         name = name,
         players = players,
-        rounds1to4 = rounds1to4,
-        rounds5to6 = rounds5to6,
-        wipeout = wipeout,
+        createdAt = nextTeamId,
     )
+
+    /** Builds score rows for one team, positional against [rounds]; null = not entered. */
+    private fun scores(teamId: Long, vararg values: Int?): List<ScoreEntity> =
+        values.mapIndexedNotNull { index, value ->
+            value?.let { ScoreEntity(teamId = teamId, roundId = rounds[index].id, value = it) }
+        }
+
+    private fun scoreOf(teams: List<TeamEntity>, scores: List<ScoreEntity>) =
+        Scoring.scoreTeams(teams, rounds, scores, feePerPlayer = 2.0).associateBy { it.name }
 
     @Test
     fun `reproduces the Rounds 1-4 and Rounds 5-6 ranks from the workbook`() {
-        val teams = listOf(
-            team("Hip Hip", rounds1to4 = 17, rounds5to6 = 13),
-            team("And In First Place...", rounds1to4 = 19, rounds5to6 = 8),
-            team("Groovy Gang", rounds1to4 = 16, rounds5to6 = 9),
-            team("Kinder Suprise", rounds1to4 = 20, rounds5to6 = 14),
-            team("Quiz Hemsworth", rounds1to4 = 21, rounds5to6 = 12),
-            team("We Thought This Was Bingo", rounds1to4 = 19, rounds5to6 = 13),
-            team("Edward Quizzerhands", rounds1to4 = 24),
-            team("T's & C's", rounds1to4 = 18),
-            team("Don't Quiz Your Day Job", rounds1to4 = 16),
-            team("Universally Challenged", rounds1to4 = 13),
-        )
+        val hipHip = team("Hip Hip")
+        val firstPlace = team("And In First Place...")
+        val groovy = team("Groovy Gang")
+        val kinder = team("Kinder Suprise")
+        val hemsworth = team("Quiz Hemsworth")
+        val bingo = team("We Thought This Was Bingo")
+        val edward = team("Edward Quizzerhands")
+        val tsAndCs = team("T's & C's")
+        val dayJob = team("Don't Quiz Your Day Job")
+        val universally = team("Universally Challenged")
 
-        val byName = Scoring.scoreTeams(teams, feePerPlayer = 2.0).associateBy { it.name }
+        val teams = listOf(hipHip, firstPlace, groovy, kinder, hemsworth, bingo, edward, tsAndCs, dayJob, universally)
+        val scores = listOf(hipHip, firstPlace, groovy, kinder, hemsworth, bingo, edward, tsAndCs, dayJob, universally)
+            .flatMap { team ->
+                when (team.name) {
+                    "Hip Hip" -> scores(team.id, 17, 13)
+                    "And In First Place..." -> scores(team.id, 19, 8)
+                    "Groovy Gang" -> scores(team.id, 16, 9)
+                    "Kinder Suprise" -> scores(team.id, 20, 14)
+                    "Quiz Hemsworth" -> scores(team.id, 21, 12)
+                    "We Thought This Was Bingo" -> scores(team.id, 19, 13)
+                    "Edward Quizzerhands" -> scores(team.id, 24)
+                    "T's & C's" -> scores(team.id, 18)
+                    "Don't Quiz Your Day Job" -> scores(team.id, 16)
+                    else -> scores(team.id, 13)
+                }
+            }
 
-        // Sheet column E (Rounds 1-4 Rank)
-        assertEquals(1, byName.getValue("Edward Quizzerhands").rankRounds1to4)
-        assertEquals(2, byName.getValue("Quiz Hemsworth").rankRounds1to4)
-        assertEquals(3, byName.getValue("Kinder Suprise").rankRounds1to4)
-        assertEquals(4, byName.getValue("And In First Place...").rankRounds1to4)
-        assertEquals(4, byName.getValue("We Thought This Was Bingo").rankRounds1to4)
-        assertEquals(6, byName.getValue("T's & C's").rankRounds1to4)
-        assertEquals(7, byName.getValue("Hip Hip").rankRounds1to4)
-        assertEquals(8, byName.getValue("Groovy Gang").rankRounds1to4)
-        assertEquals(8, byName.getValue("Don't Quiz Your Day Job").rankRounds1to4)
-        assertEquals(10, byName.getValue("Universally Challenged").rankRounds1to4)
+        val byName = scoreOf(teams, scores)
 
-        // Sheet column H (Rounds 5-6 Rank, ranked on the Subtotal)
-        assertEquals(1, byName.getValue("Kinder Suprise").rankRounds5to6)
-        assertEquals(2, byName.getValue("Quiz Hemsworth").rankRounds5to6)
-        assertEquals(3, byName.getValue("We Thought This Was Bingo").rankRounds5to6)
-        assertEquals(4, byName.getValue("Hip Hip").rankRounds5to6)
-        assertEquals(5, byName.getValue("And In First Place...").rankRounds5to6)
-        assertEquals(6, byName.getValue("Groovy Gang").rankRounds5to6)
-        assertNull(byName.getValue("Edward Quizzerhands").rankRounds5to6)
+        // Sheet column E — rank by the Rounds 1-4 score.
+        assertEquals(1, byName.getValue("Edward Quizzerhands").rank(1))
+        assertEquals(2, byName.getValue("Quiz Hemsworth").rank(1))
+        assertEquals(3, byName.getValue("Kinder Suprise").rank(1))
+        assertEquals(4, byName.getValue("And In First Place...").rank(1))
+        assertEquals(4, byName.getValue("We Thought This Was Bingo").rank(1))
+        assertEquals(6, byName.getValue("T's & C's").rank(1))
+        assertEquals(7, byName.getValue("Hip Hip").rank(1))
+        assertEquals(8, byName.getValue("Groovy Gang").rank(1))
+        assertEquals(8, byName.getValue("Don't Quiz Your Day Job").rank(1))
+        assertEquals(10, byName.getValue("Universally Challenged").rank(1))
+
+        // Sheet column H — rank by the running total after Rounds 5-6.
+        assertEquals(1, byName.getValue("Kinder Suprise").runningRank(2))
+        assertEquals(2, byName.getValue("Quiz Hemsworth").runningRank(2))
+        assertEquals(3, byName.getValue("We Thought This Was Bingo").runningRank(2))
+        assertEquals(4, byName.getValue("Hip Hip").runningRank(2))
+        assertEquals(5, byName.getValue("And In First Place...").runningRank(2))
+        assertEquals(6, byName.getValue("Groovy Gang").runningRank(2))
+        assertNull(byName.getValue("Edward Quizzerhands").runningRank(2))
+
+        // Nobody recorded a Wipeout, so the final position is unranked — as in the sheet.
+        assertNull(byName.getValue("Hip Hip").rankFinal)
     }
 
     @Test
-    fun `subtotal and total stay blank until their round is entered`() {
-        val teams = listOf(
-            team("Only rounds 1-4", rounds1to4 = 20),
-            team("Plus rounds 5-6", rounds1to4 = 20, rounds5to6 = 10),
-            team("Plus wipeout", rounds1to4 = 20, rounds5to6 = 10, wipeout = 5),
-        )
+    fun `subtotal is the running total after the penultimate round`() {
+        val onlyFirst = team("Only rounds 1-4")
+        val both = team("Plus rounds 5-6")
+        val complete = team("Plus wipeout")
 
-        val byName = Scoring.scoreTeams(teams, feePerPlayer = 2.0).associateBy { it.name }
+        val teams = listOf(onlyFirst, both, complete)
+        val scores = scores(onlyFirst.id, 20) +
+            scores(both.id, 20, 10) +
+            scores(complete.id, 20, 10, 5)
+
+        val byName = scoreOf(teams, scores)
 
         assertNull(byName.getValue("Only rounds 1-4").subtotal)
         assertNull(byName.getValue("Only rounds 1-4").total)
@@ -85,25 +116,24 @@ class ScoringTest {
 
     @Test
     fun `a wipeout of zero is kept as an entered score`() {
-        val teams = listOf(
-            team("Zero wipeout", rounds1to4 = 20, rounds5to6 = 10, wipeout = 0),
-        )
+        val zeroWipeout = team("Zero wipeout")
+        val scores = scores(zeroWipeout.id, 20, 10, 0)
 
-        val score = Scoring.scoreTeams(teams, feePerPlayer = 2.0).single()
+        val score = Scoring.scoreTeams(listOf(zeroWipeout), rounds, scores, 2.0).single()
 
         assertEquals(30, score.subtotal)
         assertEquals(30, score.total)
-        assertEquals(0, score.team.wipeout)
+        assertEquals(0, score.value(3))
     }
 
     @Test
     fun `amount is the per-player fee multiplied by the headcount`() {
-        val teams = listOf(
-            team("Four players", players = 4),
-            team("No players recorded"),
-        )
+        val fourPlayers = team("Four players", players = 4)
+        val noPlayers = team("No players recorded")
 
-        val byName = Scoring.scoreTeams(teams, feePerPlayer = 2.5).associateBy { it.name }
+        val byName = Scoring
+            .scoreTeams(listOf(fourPlayers, noPlayers), rounds, emptyList(), feePerPlayer = 2.5)
+            .associateBy { it.name }
 
         assertEquals(10.0, byName.getValue("Four players").amount!!, 0.0001)
         assertNull(byName.getValue("No players recorded").amount)
@@ -111,16 +141,68 @@ class ScoringTest {
 
     @Test
     fun `final position ranks on the total`() {
-        val teams = listOf(
-            team("First", rounds1to4 = 20, rounds5to6 = 10, wipeout = 10), // 40
-            team("Second", rounds1to4 = 20, rounds5to6 = 10, wipeout = 5), // 35
-            team("Third", rounds1to4 = 20, rounds5to6 = 10, wipeout = 0), // 30
-        )
+        val first = team("First")
+        val second = team("Second")
+        val third = team("Third")
 
-        val byName = Scoring.scoreTeams(teams, feePerPlayer = 2.0).associateBy { it.name }
+        val teams = listOf(first, second, third)
+        val scores = scores(first.id, 20, 10, 10) +
+            scores(second.id, 20, 10, 5) +
+            scores(third.id, 20, 10, 0)
+
+        val byName = scoreOf(teams, scores)
 
         assertEquals(1, byName.getValue("First").rankFinal)
         assertEquals(2, byName.getValue("Second").rankFinal)
         assertEquals(3, byName.getValue("Third").rankFinal)
+    }
+
+    @Test
+    fun `a running total stays blank until every round up to that point is entered`() {
+        val gap = team("Missed round one")
+        val scores = scores(gap.id, null, 10, 5)
+
+        val score = Scoring.scoreTeams(listOf(gap), rounds, scores, 2.0).single()
+
+        assertNull(score.runningTotal(2))
+        assertNull(score.runningTotal(3))
+        assertNull(score.total)
+        // The round that *was* played is still recorded and ranked.
+        assertEquals(10, score.value(2))
+        assertEquals(1, score.rank(2))
+    }
+
+    @Test
+    fun `handles a single configured round`() {
+        val oneRound = listOf(RoundEntity(id = 7, name = "Final", position = 0))
+        val teamA = team("A")
+        val teamB = team("B")
+        val scores = listOf(
+            ScoreEntity(teamId = teamA.id, roundId = 7, value = 12),
+            ScoreEntity(teamId = teamB.id, roundId = 7, value = 15),
+        )
+
+        val byName = Scoring.scoreTeams(listOf(teamA, teamB), oneRound, scores, 2.0).associateBy { it.name }
+
+        // No subtotal with a single round, but the total is that round.
+        assertNull(byName.getValue("A").subtotal)
+        assertEquals(12, byName.getValue("A").total)
+        assertEquals(2, byName.getValue("A").rankFinal)
+        assertEquals(1, byName.getValue("B").rankFinal)
+    }
+
+    @Test
+    fun `handles an arbitrary number of rounds`() {
+        val many = (1L..5L).map { RoundEntity(id = it, name = "Round $it", position = (it - 1).toInt()) }
+        val teamA = team("A")
+        val scores = listOf(1L, 2L, 3L, 4L, 5L).mapIndexed { index, roundId ->
+            ScoreEntity(teamId = teamA.id, roundId = roundId, value = index + 1)
+        }
+
+        val score = Scoring.scoreTeams(listOf(teamA), many, scores, 2.0).single()
+
+        assertEquals(1 + 2 + 3 + 4, score.subtotal)
+        assertEquals(1 + 2 + 3 + 4 + 5, score.total)
+        assertEquals(1 + 2 + 3, score.runningTotal(3))
     }
 }

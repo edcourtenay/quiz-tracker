@@ -3,7 +3,6 @@ package uk.co.edcourtenay.quiztracker.export
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.FileProvider
-import uk.co.edcourtenay.quiztracker.domain.TeamScore
 import uk.co.edcourtenay.quiztracker.ui.QuizUiState
 import java.io.File
 import java.text.SimpleDateFormat
@@ -11,14 +10,19 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Turns the current standings into a CSV that mirrors the columns of the
- * "Scores" sheet, then hands it to the system share sheet.
+ * Turns the current standings into a CSV, generalised to whatever rounds are
+ * configured: the identity columns, then each round's score and rank, then the
+ * subtotal (when there is more than one round), total and final position.
+ *
+ * The per-round rank is the rank by the running total through that round, which
+ * is what the leaderboards order by by default.
  */
 object ResultsExporter {
 
     private const val FILE_PROVIDER_SUFFIX = ".fileprovider"
 
     fun buildCsv(state: QuizUiState): String {
+        val rounds = state.rounds
         val sb = StringBuilder()
 
         sb.appendLine(csvRow(listOf(state.config.quizName)))
@@ -34,19 +38,19 @@ object ResultsExporter {
 
         sb.appendLine(
             csvRow(
-                listOf(
-                    "Team Name",
-                    "Players",
-                    "Amount",
-                    "Rounds 1-4",
-                    "Rounds 1-4 Rank",
-                    "Rounds 5-6",
-                    "Subtotal",
-                    "Rounds 5-6 Rank",
-                    "Wipeout",
-                    "Total",
-                    "Final Position",
-                ),
+                buildList {
+                    add("Team Name")
+                    add("Players")
+                    add("Amount")
+                    rounds.forEach { round ->
+                        val name = round.name.ifBlank { "Round" }
+                        add(name)
+                        add("$name Rank")
+                    }
+                    if (rounds.size >= 2) add("Subtotal")
+                    add("Total")
+                    add("Final Position")
+                },
             ),
         )
 
@@ -56,22 +60,21 @@ object ResultsExporter {
                 { it.team.createdAt },
             ),
         )
-        ordered.forEach { row ->
+        ordered.forEach { score ->
             sb.appendLine(
                 csvRow(
-                    listOf(
-                        row.name,
-                        row.team.players?.toString() ?: "",
-                        money(row.amount),
-                        row.team.rounds1to4?.toString() ?: "",
-                        row.rankRounds1to4?.toString() ?: "",
-                        row.team.rounds5to6?.toString() ?: "",
-                        row.subtotal?.toString() ?: "",
-                        row.rankRounds5to6?.toString() ?: "",
-                        row.team.wipeout?.toString() ?: "",
-                        row.total?.toString() ?: "",
-                        row.rankFinal?.toString() ?: "",
-                    ),
+                    buildList {
+                        add(score.name)
+                        add(score.team.players?.toString() ?: "")
+                        add(money(score.amount))
+                        rounds.forEach { round ->
+                            add(score.value(round.id)?.toString() ?: "")
+                            add(score.runningRank(round.id)?.toString() ?: "")
+                        }
+                        if (rounds.size >= 2) add(score.subtotal?.toString() ?: "")
+                        add(score.total?.toString() ?: "")
+                        add(score.rankFinal?.toString() ?: "")
+                    },
                 ),
             )
         }
