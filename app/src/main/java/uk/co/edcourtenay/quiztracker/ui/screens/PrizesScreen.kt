@@ -43,12 +43,11 @@ fun PrizesScreen(
 ) {
     PrizesScreenContent(
         state = state,
+        modifier = modifier,
         onTeamClick = onTeamClick,
         onQuestionChange = { rank, question -> viewModel.setTieBreakQuestion(rank, question) },
         onAnswerChange = { rank, teamId, answer -> viewModel.setTieBreakAnswer(rank, teamId, answer) },
-        onCorrectAnswerChange = { rank, answer -> viewModel.setTieBreakCorrectAnswer(rank, answer) },
-        modifier = modifier,
-    )
+    ) { rank, answer -> viewModel.setTieBreakCorrectAnswer(rank, answer) }
 }
 
 /**
@@ -58,11 +57,11 @@ fun PrizesScreen(
 @Composable
 internal fun PrizesScreenContent(
     state: QuizUiState,
+    modifier: Modifier = Modifier,
     onTeamClick: (Long) -> Unit = {},
     onQuestionChange: (rank: Int, question: String) -> Unit = { _, _ -> },
     onAnswerChange: (rank: Int, teamId: Long, answer: Double?) -> Unit = { _, _, _ -> },
     onCorrectAnswerChange: (rank: Int, answer: Double?) -> Unit = { _, _ -> },
-    modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier

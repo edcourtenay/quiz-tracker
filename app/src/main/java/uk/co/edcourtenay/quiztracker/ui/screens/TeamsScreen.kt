@@ -58,6 +58,7 @@ import uk.co.edcourtenay.quiztracker.ui.formatMoney
 import uk.co.edcourtenay.quiztracker.ui.formatPosition
 import uk.co.edcourtenay.quiztracker.ui.formatScore
 import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 fun TeamsScreen(
@@ -70,6 +71,7 @@ fun TeamsScreen(
 
     TeamsScreenContent(
         state = state,
+        modifier = modifier,
         focusTeamId = focusTeamId,
         revealRequest = revealRequest,
         onFocusHandled = viewModel::onFocusHandled,
@@ -77,9 +79,7 @@ fun TeamsScreen(
         onAddTeam = { viewModel.addTeam() },
         onUpdateTeam = { viewModel.updateTeam(it) },
         onDeleteTeam = { viewModel.deleteTeam(it) },
-        onScoreChange = { teamId, roundId, value -> viewModel.setScore(teamId, roundId, value) },
-        modifier = modifier,
-    )
+    ) { teamId, roundId, value -> viewModel.setScore(teamId, roundId, value) }
 }
 
 /**
@@ -89,6 +89,7 @@ fun TeamsScreen(
 @Composable
 internal fun TeamsScreenContent(
     state: QuizUiState,
+    modifier: Modifier = Modifier,
     focusTeamId: Long? = null,
     revealRequest: RevealRequest? = null,
     onFocusHandled: () -> Unit = {},
@@ -97,7 +98,6 @@ internal fun TeamsScreenContent(
     onUpdateTeam: (TeamEntity) -> Unit = {},
     onDeleteTeam: (TeamEntity) -> Unit = {},
     onScoreChange: (teamId: Long, roundId: Long, value: Int?) -> Unit = { _, _, _ -> },
-    modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
 
@@ -118,7 +118,7 @@ internal fun TeamsScreenContent(
     // Let the reveal highlight fade out once the user has had a moment to see it.
     LaunchedEffect(revealRequest) {
         if (revealRequest != null) {
-            delay(REVEAL_HIGHLIGHT_MILLIS)
+            delay(REVEAL_HIGHLIGHT_MILLIS.milliseconds)
             onRevealHandled()
         }
     }

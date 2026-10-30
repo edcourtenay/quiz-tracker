@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -57,6 +56,7 @@ fun SettingsScreen(
 ) {
     SettingsScreenContent(
         state = state,
+        modifier = modifier,
         onQuizNameChange = { viewModel.setQuizName(it) },
         onFeeChange = { viewModel.setFeePerPlayer(it) },
         onClearScores = { viewModel.clearAllScores() },
@@ -69,9 +69,7 @@ fun SettingsScreen(
         onAddPrize = { viewModel.addPrize() },
         onUpdatePrize = { viewModel.updatePrize(it) },
         onMovePrize = { prize, offset -> viewModel.movePrize(prize, offset) },
-        onDeletePrize = { viewModel.deletePrize(it) },
-        modifier = modifier,
-    )
+    ) { viewModel.deletePrize(it) }
 }
 
 /**
@@ -81,6 +79,7 @@ fun SettingsScreen(
 @Composable
 internal fun SettingsScreenContent(
     state: QuizUiState,
+    modifier: Modifier = Modifier,
     onQuizNameChange: (String) -> Unit = {},
     onFeeChange: (Double) -> Unit = {},
     onClearScores: () -> Unit = {},
@@ -94,7 +93,6 @@ internal fun SettingsScreenContent(
     onUpdatePrize: (PrizeEntity) -> Unit = {},
     onMovePrize: (PrizeEntity, Int) -> Unit = { _, _ -> },
     onDeletePrize: (PrizeEntity) -> Unit = {},
-    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()

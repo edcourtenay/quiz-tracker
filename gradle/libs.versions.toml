@@ -1,7 +1,7 @@
 [versions]
-agp = "8.13.2"
+agp = "9.5.0"
 kotlin = "2.2.20"
-ksp = "2.2.20-2.0.4"
+ksp = "2.3.6"
 coreKtx = "1.17.0"
 lifecycle = "2.9.4"
 activityCompose = "1.11.0"
@@ -35,6 +35,5 @@ junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
