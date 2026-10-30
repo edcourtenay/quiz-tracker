@@ -1,5 +1,6 @@
 package uk.co.edcourtenay.quiztracker.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,6 +52,7 @@ import uk.co.edcourtenay.quiztracker.ui.components.ValueChip
 import uk.co.edcourtenay.quiztracker.ui.formatMoney
 import uk.co.edcourtenay.quiztracker.ui.formatPosition
 import uk.co.edcourtenay.quiztracker.ui.formatScore
+import kotlinx.coroutines.delay
 
 @Composable
 fun TeamsScreen(
@@ -59,11 +61,14 @@ fun TeamsScreen(
     modifier: Modifier = Modifier,
 ) {
     val focusTeamId by viewModel.focusTeamId.collectAsStateWithLifecycle()
+    val revealTeamId by viewModel.revealTeamId.collectAsStateWithLifecycle()
 
     TeamsScreenContent(
         state = state,
         focusTeamId = focusTeamId,
+        revealTeamId = revealTeamId,
         onFocusHandled = viewModel::onFocusHandled,
+        onRevealHandled = viewModel::onRevealHandled,
         onAddTeam = { viewModel.addTeam() },
         onUpdateTeam = { viewModel.updateTeam(it) },
         onDeleteTeam = { viewModel.deleteTeam(it) },
@@ -79,7 +84,9 @@ fun TeamsScreen(
 internal fun TeamsScreenContent(
     state: QuizUiState,
     focusTeamId: Long? = null,
+    revealTeamId: Long? = null,
     onFocusHandled: () -> Unit = {},
+    onRevealHandled: () -> Unit = {},
     onAddTeam: () -> Unit = {},
     onUpdateTeam: (TeamEntity) -> Unit = {},
     onDeleteTeam: (TeamEntity) -> Unit = {},
@@ -91,12 +98,21 @@ internal fun TeamsScreenContent(
     // there are no teams, so team rows are offset by this many items.
     val teamRowOffset = if (state.teams.isEmpty()) 2 else 1
 
-    // When a team is added, bring its row into view so its name field can focus.
-    LaunchedEffect(focusTeamId, state.scores) {
-        val id = focusTeamId ?: return@LaunchedEffect
+    // Scroll to a team that was just added (to focus it) or tapped on a board.
+    val scrollTargetId = focusTeamId ?: revealTeamId
+    LaunchedEffect(scrollTargetId, state.scores) {
+        val id = scrollTargetId ?: return@LaunchedEffect
         val index = state.scores.indexOfFirst { it.team.id == id }
         if (index >= 0) {
             listState.animateScrollToItem(index + teamRowOffset)
+        }
+    }
+
+    // Let the reveal highlight fade out once the user has had a moment to see it.
+    LaunchedEffect(revealTeamId) {
+        if (revealTeamId != null) {
+            delay(REVEAL_HIGHLIGHT_MILLIS)
+            onRevealHandled()
         }
     }
 
@@ -117,6 +133,7 @@ internal fun TeamsScreenContent(
                 TeamCard(
                     score = score,
                     requestNameFocus = focusTeamId == score.team.id,
+                    isRevealed = revealTeamId == score.team.id,
                     onNameFocusHandled = onFocusHandled,
                     onNameChange = { onUpdateTeam(score.team.copy(name = it)) },
                     onPlayersChange = { onUpdateTeam(score.team.copy(players = it)) },
@@ -138,6 +155,9 @@ internal fun TeamsScreenContent(
         }
     }
 }
+
+/** How long a team stays highlighted after being revealed from a board. */
+private const val REVEAL_HIGHLIGHT_MILLIS = 2_500L
 
 @Composable
 internal fun SummaryCard(state: QuizUiState) {
@@ -175,6 +195,7 @@ private fun EmptyHint() {
 internal fun TeamCard(
     score: TeamScore,
     requestNameFocus: Boolean,
+    isRevealed: Boolean,
     onNameFocusHandled: () -> Unit,
     onNameChange: (String) -> Unit,
     onPlayersChange: (Int?) -> Unit,
@@ -186,7 +207,14 @@ internal fun TeamCard(
 ) {
     val team: TeamEntity = score.team
 
-    Card(modifier = modifier.fillMaxWidth()) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        border = if (isRevealed) {
+            BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+        } else {
+            null
+        },
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()

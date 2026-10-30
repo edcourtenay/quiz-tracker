@@ -62,6 +62,24 @@ class QuizViewModel(private val repository: QuizRepository) : ViewModel() {
         _focusTeamId.value = null
     }
 
+    private val _revealTeamId = MutableStateFlow<Long?>(null)
+
+    /**
+     * Id of a team the Scores screen should scroll into view, e.g. after the user
+     * taps that team on a leaderboard. Null when there is nothing pending.
+     */
+    val revealTeamId: StateFlow<Long?> = _revealTeamId.asStateFlow()
+
+    /** Ask the Scores screen to bring the given team into view. */
+    fun revealTeam(teamId: Long) {
+        _revealTeamId.value = teamId
+    }
+
+    /** Called by the UI once the team has been revealed. */
+    fun onRevealHandled() {
+        _revealTeamId.value = null
+    }
+
     fun updateTeam(team: TeamEntity) = viewModelScope.launch {
         repository.updateTeam(team)
     }

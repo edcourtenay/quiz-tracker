@@ -44,6 +44,7 @@ private enum class Board(val label: String) {
 }
 
 private data class BoardRow(
+    val teamId: Long,
     val rank: Int?,
     val name: String,
     val value: Int?,
@@ -59,6 +60,7 @@ fun LeaderboardScreen(
     state: QuizUiState,
     modifier: Modifier = Modifier,
     initialBoardIndex: Int = 0,
+    onTeamClick: (Long) -> Unit = {},
 ) {
     var selected by rememberSaveable {
         mutableIntStateOf(initialBoardIndex.coerceIn(0, Board.entries.lastIndex))
@@ -98,14 +100,16 @@ fun LeaderboardScreen(
                 contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(rows) { row -> LeaderboardRow(row) }
+                items(rows) { row ->
+                    LeaderboardRow(row = row, onClick = { onTeamClick(row.teamId) })
+                }
             }
         }
     }
 }
 
 @Composable
-private fun LeaderboardRow(row: BoardRow) {
+private fun LeaderboardRow(row: BoardRow, onClick: () -> Unit) {
     val container = if (row.isLeader) {
         MaterialTheme.colorScheme.primaryContainer
     } else {
@@ -118,6 +122,7 @@ private fun LeaderboardRow(row: BoardRow) {
     }
 
     Card(
+        onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = container),
     ) {
@@ -244,6 +249,7 @@ private fun TeamScore.toRow(
     caption: String,
     isZeroWipeout: Boolean = false,
 ): BoardRow = BoardRow(
+    teamId = team.id,
     rank = rank,
     name = name,
     value = value,

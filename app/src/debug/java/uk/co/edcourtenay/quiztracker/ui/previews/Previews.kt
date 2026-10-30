@@ -41,6 +41,15 @@ private fun ScoresPreview() {
     }
 }
 
+@Preview(name = "Scores – revealed team", showBackground = true, heightDp = 1100)
+@Composable
+private fun ScoresRevealedPreview() {
+    QuizTrackerTheme {
+        // Mirrors tapping "Groovy Gang" on a leaderboard.
+        TeamsScreenContent(state = PreviewData.state(), revealTeamId = 4)
+    }
+}
+
 @Preview(
     name = "Scores – dark",
     showBackground = true,
@@ -140,6 +149,7 @@ private fun TeamCardPreview() {
             TeamCard(
                 score = PreviewData.state().scores.first(),
                 requestNameFocus = false,
+                isRevealed = false,
                 onNameFocusHandled = {},
                 onNameChange = {},
                 onPlayersChange = {},

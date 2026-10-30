@@ -61,7 +61,14 @@ fun QuizTrackerRoot(
         Box(modifier = Modifier.padding(padding)) {
             when (tabs[selectedTab]) {
                 Tab.Scores -> TeamsScreen(state = state, viewModel = viewModel)
-                Tab.Leaderboard -> LeaderboardScreen(state = state)
+                Tab.Leaderboard -> LeaderboardScreen(
+                    state = state,
+                    onTeamClick = { teamId ->
+                        // Jump to the Scores screen with that team brought into view.
+                        viewModel.revealTeam(teamId)
+                        selectedTab = Tab.Scores.ordinal
+                    },
+                )
                 Tab.Settings -> SettingsScreen(state = state, viewModel = viewModel)
             }
         }
