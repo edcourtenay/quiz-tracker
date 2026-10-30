@@ -46,6 +46,8 @@ import uk.co.edcourtenay.quiztracker.data.TeamEntity
 import uk.co.edcourtenay.quiztracker.domain.TeamScore
 import uk.co.edcourtenay.quiztracker.ui.QuizUiState
 import uk.co.edcourtenay.quiztracker.ui.QuizViewModel
+import uk.co.edcourtenay.quiztracker.ui.RevealRequest
+import uk.co.edcourtenay.quiztracker.ui.ScoreField
 import uk.co.edcourtenay.quiztracker.ui.components.NumberField
 import uk.co.edcourtenay.quiztracker.ui.components.StatTile
 import uk.co.edcourtenay.quiztracker.ui.components.ValueChip
@@ -61,12 +63,12 @@ fun TeamsScreen(
     modifier: Modifier = Modifier,
 ) {
     val focusTeamId by viewModel.focusTeamId.collectAsStateWithLifecycle()
-    val revealTeamId by viewModel.revealTeamId.collectAsStateWithLifecycle()
+    val revealRequest by viewModel.revealRequest.collectAsStateWithLifecycle()
 
     TeamsScreenContent(
         state = state,
         focusTeamId = focusTeamId,
-        revealTeamId = revealTeamId,
+        revealRequest = revealRequest,
         onFocusHandled = viewModel::onFocusHandled,
         onRevealHandled = viewModel::onRevealHandled,
         onAddTeam = { viewModel.addTeam() },
@@ -84,7 +86,7 @@ fun TeamsScreen(
 internal fun TeamsScreenContent(
     state: QuizUiState,
     focusTeamId: Long? = null,
-    revealTeamId: Long? = null,
+    revealRequest: RevealRequest? = null,
     onFocusHandled: () -> Unit = {},
     onRevealHandled: () -> Unit = {},
     onAddTeam: () -> Unit = {},
@@ -99,7 +101,7 @@ internal fun TeamsScreenContent(
     val teamRowOffset = if (state.teams.isEmpty()) 2 else 1
 
     // Scroll to a team that was just added (to focus it) or tapped on a board.
-    val scrollTargetId = focusTeamId ?: revealTeamId
+    val scrollTargetId = focusTeamId ?: revealRequest?.teamId
     LaunchedEffect(scrollTargetId, state.scores) {
         val id = scrollTargetId ?: return@LaunchedEffect
         val index = state.scores.indexOfFirst { it.team.id == id }
@@ -109,8 +111,8 @@ internal fun TeamsScreenContent(
     }
 
     // Let the reveal highlight fade out once the user has had a moment to see it.
-    LaunchedEffect(revealTeamId) {
-        if (revealTeamId != null) {
+    LaunchedEffect(revealRequest) {
+        if (revealRequest != null) {
             delay(REVEAL_HIGHLIGHT_MILLIS)
             onRevealHandled()
         }
@@ -130,10 +132,12 @@ internal fun TeamsScreenContent(
             }
 
             items(state.scores, key = { it.team.id }) { score ->
+                val reveal = revealRequest?.takeIf { it.teamId == score.team.id }
                 TeamCard(
                     score = score,
                     requestNameFocus = focusTeamId == score.team.id,
-                    isRevealed = revealTeamId == score.team.id,
+                    isRevealed = reveal != null,
+                    focusField = reveal?.field,
                     onNameFocusHandled = onFocusHandled,
                     onNameChange = { onUpdateTeam(score.team.copy(name = it)) },
                     onPlayersChange = { onUpdateTeam(score.team.copy(players = it)) },
@@ -196,6 +200,7 @@ internal fun TeamCard(
     score: TeamScore,
     requestNameFocus: Boolean,
     isRevealed: Boolean,
+    focusField: ScoreField?,
     onNameFocusHandled: () -> Unit,
     onNameChange: (String) -> Unit,
     onPlayersChange: (Int?) -> Unit,
@@ -250,18 +255,21 @@ internal fun TeamCard(
                     value = team.rounds1to4,
                     label = "Rounds 1-4",
                     onValueChange = onRounds1to4Change,
+                    requestFocus = focusField == ScoreField.Rounds1to4,
                     modifier = Modifier.weight(1f),
                 )
                 NumberField(
                     value = team.rounds5to6,
                     label = "Rounds 5-6",
                     onValueChange = onRounds5to6Change,
+                    requestFocus = focusField == ScoreField.Rounds5to6,
                     modifier = Modifier.weight(1f),
                 )
                 NumberField(
                     value = team.wipeout,
                     label = "Wipeout",
                     onValueChange = onWipeoutChange,
+                    requestFocus = focusField == ScoreField.Wipeout,
                     modifier = Modifier.weight(1f),
                 )
             }

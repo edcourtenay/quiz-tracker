@@ -68,9 +68,10 @@ fun QuizTrackerRoot(
                     state = state,
                     selectedBoardIndex = boardIndex,
                     onBoardIndexChange = { boardIndex = it },
-                    onTeamClick = { teamId ->
-                        // Jump to the Scores screen with that team brought into view.
-                        viewModel.revealTeam(teamId)
+                    onTeamClick = { teamId, field ->
+                        // Jump to the Scores screen with that team brought into
+                        // view and the matching score focused for input.
+                        viewModel.revealTeam(teamId, field)
                         selectedTab = Tab.Scores.ordinal
                     },
                 )

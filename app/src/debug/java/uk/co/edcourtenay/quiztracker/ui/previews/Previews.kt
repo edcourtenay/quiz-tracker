@@ -11,6 +11,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import uk.co.edcourtenay.quiztracker.ui.RevealRequest
+import uk.co.edcourtenay.quiztracker.ui.ScoreField
 import uk.co.edcourtenay.quiztracker.ui.components.NumberField
 import uk.co.edcourtenay.quiztracker.ui.components.StatTile
 import uk.co.edcourtenay.quiztracker.ui.components.ValueChip
@@ -45,8 +47,11 @@ private fun ScoresPreview() {
 @Composable
 private fun ScoresRevealedPreview() {
     QuizTrackerTheme {
-        // Mirrors tapping "Groovy Gang" on a leaderboard.
-        TeamsScreenContent(state = PreviewData.state(), revealTeamId = 4)
+        // Mirrors tapping "Groovy Gang" on the Wipeout board.
+        TeamsScreenContent(
+            state = PreviewData.state(),
+            revealRequest = RevealRequest(teamId = 4, field = ScoreField.Wipeout),
+        )
     }
 }
 
@@ -150,6 +155,7 @@ private fun TeamCardPreview() {
                 score = PreviewData.state().scores.first(),
                 requestNameFocus = false,
                 isRevealed = false,
+                focusField = null,
                 onNameFocusHandled = {},
                 onNameChange = {},
                 onPlayersChange = {},

@@ -11,18 +11,27 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 
 /**
  * A compact numeric field for a nullable integer score.
  * An empty field maps to `null` ("not entered"), matching a blank sheet cell.
+ *
+ * When [requestFocus] flips to true the field takes focus and selects its
+ * current text, so typing replaces the existing score.
  */
 @Composable
 fun NumberField(
@@ -30,20 +39,40 @@ fun NumberField(
     label: String,
     onValueChange: (Int?) -> Unit,
     modifier: Modifier = Modifier,
+    requestFocus: Boolean = false,
 ) {
-    var text by remember(value) { mutableStateOf(value?.toString().orEmpty()) }
+    // Selection is kept at the end so the cursor does not jump to the start when
+    // the value round-trips through Room.
+    var field by remember(value) {
+        val text = value?.toString().orEmpty()
+        mutableStateOf(TextFieldValue(text, TextRange(text.length)))
+    }
+    val focusRequester = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+
+    LaunchedEffect(requestFocus) {
+        if (requestFocus) {
+            focusRequester.requestFocus()
+            field = field.copy(selection = TextRange(0, field.text.length))
+            keyboard?.show()
+        }
+    }
 
     OutlinedTextField(
-        value = text,
+        value = field,
         onValueChange = { input ->
-            val digits = input.filter { it.isDigit() }.take(5)
-            text = digits
+            val digits = input.text.filter { it.isDigit() }.take(5)
+            field = if (digits == input.text) {
+                input
+            } else {
+                TextFieldValue(digits, TextRange(digits.length))
+            }
             onValueChange(digits.toIntOrNull())
         },
         label = { Text(label) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        modifier = modifier,
+        modifier = modifier.focusRequester(focusRequester),
     )
 }
 

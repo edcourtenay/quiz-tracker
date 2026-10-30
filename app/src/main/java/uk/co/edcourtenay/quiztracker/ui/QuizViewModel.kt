@@ -29,6 +29,13 @@ data class QuizUiState(
     val totalFunds: Double get() = scores.sumOf { it.amount ?: 0.0 }
 }
 
+/** A one-shot request to reveal a team on the Scores screen. */
+data class RevealRequest(
+    val teamId: Long,
+    /** Which score field to focus, or null when the board has no editable value. */
+    val field: ScoreField?,
+)
+
 class QuizViewModel(private val repository: QuizRepository) : ViewModel() {
 
     val uiState: StateFlow<QuizUiState> =
@@ -62,22 +69,25 @@ class QuizViewModel(private val repository: QuizRepository) : ViewModel() {
         _focusTeamId.value = null
     }
 
-    private val _revealTeamId = MutableStateFlow<Long?>(null)
+    private val _revealRequest = MutableStateFlow<RevealRequest?>(null)
 
     /**
-     * Id of a team the Scores screen should scroll into view, e.g. after the user
-     * taps that team on a leaderboard. Null when there is nothing pending.
+     * A pending request to show a team on the Scores screen, e.g. after the user
+     * tapped that team on a leaderboard. Null when there is nothing pending.
      */
-    val revealTeamId: StateFlow<Long?> = _revealTeamId.asStateFlow()
+    val revealRequest: StateFlow<RevealRequest?> = _revealRequest.asStateFlow()
 
-    /** Ask the Scores screen to bring the given team into view. */
-    fun revealTeam(teamId: Long) {
-        _revealTeamId.value = teamId
+    /**
+     * Ask the Scores screen to bring [teamId] into view, focusing [field] for
+     * input when the originating board has an editable score.
+     */
+    fun revealTeam(teamId: Long, field: ScoreField? = null) {
+        _revealRequest.value = RevealRequest(teamId = teamId, field = field)
     }
 
     /** Called by the UI once the team has been revealed. */
     fun onRevealHandled() {
-        _revealTeamId.value = null
+        _revealRequest.value = null
     }
 
     fun updateTeam(team: TeamEntity) = viewModelScope.launch {

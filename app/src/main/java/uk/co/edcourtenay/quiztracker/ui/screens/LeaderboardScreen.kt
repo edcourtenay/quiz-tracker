@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import uk.co.edcourtenay.quiztracker.domain.TeamScore
 import uk.co.edcourtenay.quiztracker.ui.QuizUiState
+import uk.co.edcourtenay.quiztracker.ui.ScoreField
 import uk.co.edcourtenay.quiztracker.ui.formatScore
 
 private enum class Board(val label: String) {
@@ -38,6 +39,15 @@ private enum class Board(val label: String) {
     Wipeout("Wipeout"),
     Final("Final"),
 }
+
+/** The score field a board's rows map to, or null when the board is derived only. */
+private val Board.editableField: ScoreField?
+    get() = when (this) {
+        Board.Rounds14 -> ScoreField.Rounds1to4
+        Board.Rounds56 -> ScoreField.Rounds5to6
+        Board.Wipeout -> ScoreField.Wipeout
+        Board.Final -> null
+    }
 
 private data class BoardRow(
     val teamId: Long,
@@ -57,7 +67,7 @@ fun LeaderboardScreen(
     selectedBoardIndex: Int,
     onBoardIndexChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    onTeamClick: (Long) -> Unit = {},
+    onTeamClick: (teamId: Long, field: ScoreField?) -> Unit = { _, _ -> },
 ) {
     val boards = Board.entries
     val selected = selectedBoardIndex.coerceIn(0, boards.lastIndex)
@@ -96,7 +106,10 @@ fun LeaderboardScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(rows) { row ->
-                    LeaderboardRow(row = row, onClick = { onTeamClick(row.teamId) })
+                    LeaderboardRow(
+                        row = row,
+                        onClick = { onTeamClick(row.teamId, board.editableField) },
+                    )
                 }
             }
         }
