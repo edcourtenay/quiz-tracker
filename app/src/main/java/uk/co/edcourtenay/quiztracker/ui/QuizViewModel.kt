@@ -191,10 +191,6 @@ class QuizViewModel(private val repository: QuizRepository) : ViewModel() {
         repository.renameRound(round, name)
     }
 
-    fun setRoundHighlightZero(round: RoundEntity, highlightZero: Boolean) = viewModelScope.launch {
-        repository.setRoundHighlightZero(round, highlightZero)
-    }
-
     /** Moves a round one place earlier (offset -1) or later (offset +1). */
     fun moveRound(round: RoundEntity, offset: Int) = viewModelScope.launch {
         repository.moveRound(round, offset)

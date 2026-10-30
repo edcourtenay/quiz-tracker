@@ -27,7 +27,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -65,7 +64,6 @@ fun SettingsScreen(
         onAddRound = { viewModel.addRound() },
         onRenameRound = { round, name -> viewModel.renameRound(round, name) },
         onMoveRound = { round, offset -> viewModel.moveRound(round, offset) },
-        onToggleRoundHighlightZero = { round, flag -> viewModel.setRoundHighlightZero(round, flag) },
         onDeleteRound = { viewModel.deleteRound(it) },
         onCountScoresForRound = { viewModel.countScoresForRound(it) },
         onAddPrize = { viewModel.addPrize() },
@@ -90,7 +88,6 @@ internal fun SettingsScreenContent(
     onAddRound: () -> Unit = {},
     onRenameRound: (RoundEntity, String) -> Unit = { _, _ -> },
     onMoveRound: (RoundEntity, Int) -> Unit = { _, _ -> },
-    onToggleRoundHighlightZero: (RoundEntity, Boolean) -> Unit = { _, _ -> },
     onDeleteRound: (RoundEntity) -> Unit = {},
     onCountScoresForRound: suspend (Long) -> Int = { 0 },
     onAddPrize: () -> Unit = {},
@@ -133,8 +130,7 @@ internal fun SettingsScreenContent(
                 )
 
                 Text(
-                    text = "Entry fee is charged per player, mirroring the " +
-                        "Amount = fee × players rule in the original sheet.",
+                    text = "Entry fee charged per player",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -166,7 +162,6 @@ internal fun SettingsScreenContent(
                         onNameChange = { onRenameRound(round, it) },
                         onMoveUp = { onMoveRound(round, -1) },
                         onMoveDown = { onMoveRound(round, 1) },
-                        onToggleHighlightZero = { onToggleRoundHighlightZero(round, it) },
                         onDelete = {
                             scope.launch {
                                 pendingRoundDelete = round to onCountScoresForRound(round.id)
@@ -373,7 +368,16 @@ private fun PrizeRow(
                 prizeId = prize.id,
                 initialName = prize.name,
                 onNameChange = onNameChange,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f, true),
+            )
+            DecimalField(
+                value = prize.value,
+                label = "Value (£)",
+                onValueChange = onValueChange,
+                //modifier = Modifier
+                //    .padding(start = 8.dp, end = 8.dp, bottom = 4.dp)
+                //    .width(160.dp),
+                modifier = Modifier.weight(1f)
             )
             IconButton(onClick = onDelete) {
                 Icon(
@@ -384,14 +388,7 @@ private fun PrizeRow(
             }
         }
 
-        DecimalField(
-            value = prize.value,
-            label = "Value (£)",
-            onValueChange = onValueChange,
-            modifier = Modifier
-                .padding(start = 8.dp, end = 8.dp, bottom = 4.dp)
-                .width(160.dp),
-        )
+
     }
 }
 
@@ -426,53 +423,33 @@ private fun RoundRow(
     onNameChange: (String) -> Unit,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
-    onToggleHighlightZero: (Boolean) -> Unit,
     onDelete: () -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onMoveUp, enabled = canMoveUp) {
-                Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Move up")
-            }
-            IconButton(onClick = onMoveDown, enabled = canMoveDown) {
-                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Move down")
-            }
-            RoundNameField(
-                roundId = round.id,
-                initialName = round.name,
-                onNameChange = onNameChange,
-                modifier = Modifier.weight(1f),
-            )
-            IconButton(onClick = onDelete, enabled = canDelete) {
-                Icon(
-                    Icons.Filled.Delete,
-                    contentDescription = "Delete round",
-                    tint = if (canDelete) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                    },
-                )
-            }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onMoveUp, enabled = canMoveUp) {
+            Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Move up")
         }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 8.dp, end = 8.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Switch(
-                checked = round.highlightZero,
-                onCheckedChange = onToggleHighlightZero,
-            )
-            Text(
-                text = "  Flag a score of 0 in red",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        IconButton(onClick = onMoveDown, enabled = canMoveDown) {
+            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Move down")
+        }
+        RoundNameField(
+            roundId = round.id,
+            initialName = round.name,
+            onNameChange = onNameChange,
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(onClick = onDelete, enabled = canDelete) {
+            Icon(
+                Icons.Filled.Delete,
+                contentDescription = "Delete round",
+                tint = if (canDelete) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                },
             )
         }
     }

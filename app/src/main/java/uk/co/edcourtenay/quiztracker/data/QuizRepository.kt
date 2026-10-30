@@ -57,9 +57,6 @@ class QuizRepository(private val dao: QuizDao) {
     suspend fun renameRound(round: RoundEntity, name: String) =
         dao.updateRound(round.copy(name = name))
 
-    suspend fun setRoundHighlightZero(round: RoundEntity, highlightZero: Boolean) =
-        dao.updateRound(round.copy(highlightZero = highlightZero))
-
     /**
      * Moves [round] one place earlier or later, rewriting the positions of the
      * affected rounds so the running order stays 0..n-1.

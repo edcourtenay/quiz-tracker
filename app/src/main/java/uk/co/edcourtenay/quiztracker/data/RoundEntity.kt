@@ -17,9 +17,4 @@ data class RoundEntity(
     val name: String = "",
     /** Order in which rounds are played; the last round is excluded from the subtotal. */
     val position: Int = 0,
-    /**
-     * Marks a round where a score of 0 is meaningful and worth calling out in red
-     * (the original "Wipeout" behaviour).
-     */
-    val highlightZero: Boolean = false,
 )

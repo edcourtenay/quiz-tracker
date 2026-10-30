@@ -111,7 +111,7 @@ fun LeaderboardScreen(
                 FilterChip(
                     selected = orderByRunningTotal,
                     onClick = { onOrderByRunningTotalChange(true) },
-                    label = { Text("Running total") },
+                    label = { Text( if (selectedIndex != state.rounds.lastIndex) "Running total" else "Final total") },
                 )
                 FilterChip(
                     selected = !orderByRunningTotal,
@@ -253,7 +253,7 @@ private fun TeamScore.toRow(round: RoundEntity, useRunningTotal: Boolean): Board
     val roundValue = value(round.id)
     val runningTotal = runningTotal(round.id)
     val rank = if (useRunningTotal) runningRank(round.id) else rank(round.id)
-    val isZeroAlert = round.highlightZero && roundValue == 0
+    val isZeroAlert = roundValue == 0
 
     return BoardRow(
         teamId = team.id,

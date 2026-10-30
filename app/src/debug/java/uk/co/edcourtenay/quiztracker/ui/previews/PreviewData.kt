@@ -22,7 +22,7 @@ internal object PreviewData {
     val rounds = listOf(
         RoundEntity(id = 1, name = "Rounds 1-4", position = 0),
         RoundEntity(id = 2, name = "Rounds 5-6", position = 1),
-        RoundEntity(id = 3, name = "Wipeout", position = 2, highlightZero = true),
+        RoundEntity(id = 3, name = "Wipeout", position = 2),
     )
 
     val prizes = listOf(

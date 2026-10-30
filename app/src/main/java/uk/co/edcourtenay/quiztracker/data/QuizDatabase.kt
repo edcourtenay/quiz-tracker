@@ -17,7 +17,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         TieBreakAnswerEntity::class,
         ConfigEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class QuizDatabase : RoomDatabase() {
@@ -28,11 +28,7 @@ abstract class QuizDatabase : RoomDatabase() {
         const val DB_NAME = "quiz-tracker.db"
 
         /** The rounds that used to be hard-coded, seeded so behaviour is unchanged. */
-        private val SEEDED_ROUNDS = listOf(
-            Triple("Rounds 1-4", 0, 0),
-            Triple("Rounds 5-6", 1, 0),
-            Triple("Wipeout", 2, 1),
-        )
+        private val SEEDED_ROUNDS = listOf("Rounds 1-4", "Rounds 5-6", "Wipeout")
 
         /** A starting set of prizes; the host sets the values. */
         private val SEEDED_PRIZES = listOf("1st", "2nd", "3rd")
@@ -56,6 +52,16 @@ abstract class QuizDatabase : RoomDatabase() {
         private const val CREATE_TIEBREAK_ANSWERS_INDEX =
             "CREATE INDEX IF NOT EXISTS `index_tiebreak_answers_teamId` ON `tiebreak_answers` (`teamId`)"
 
+        private const val CREATE_SCORES =
+            "CREATE TABLE IF NOT EXISTS `scores` (" +
+                "`teamId` INTEGER NOT NULL, `roundId` INTEGER NOT NULL, `value` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`teamId`, `roundId`), " +
+                "FOREIGN KEY(`teamId`) REFERENCES `teams`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE, " +
+                "FOREIGN KEY(`roundId`) REFERENCES `rounds`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)"
+
+        private const val CREATE_SCORES_ROUND_INDEX =
+            "CREATE INDEX IF NOT EXISTS `index_scores_roundId` ON `scores` (`roundId`)"
+
         private fun seedPrizes(db: SupportSQLiteDatabase) {
             SEEDED_PRIZES.forEachIndexed { position, name ->
                 db.execSQL(
@@ -65,11 +71,22 @@ abstract class QuizDatabase : RoomDatabase() {
             }
         }
 
+        /** Seeds the current `rounds` shape: (id, name, position). */
         private fun seedRounds(db: SupportSQLiteDatabase) {
-            SEEDED_ROUNDS.forEachIndexed { index, (name, position, highlightZero) ->
+            SEEDED_ROUNDS.forEachIndexed { position, name ->
+                db.execSQL(
+                    "INSERT INTO `rounds` (id, name, position) VALUES (?, ?, ?)",
+                    arrayOf<Any>(position + 1, name, position),
+                )
+            }
+        }
+
+        /** Seeds the v2/v3 shape, which still had the `highlightZero` column. */
+        private fun seedRoundsWithFlag(db: SupportSQLiteDatabase) {
+            SEEDED_ROUNDS.forEachIndexed { position, name ->
                 db.execSQL(
                     "INSERT INTO `rounds` (id, name, position, highlightZero) VALUES (?, ?, ?, ?)",
-                    arrayOf<Any>(index + 1, name, position, highlightZero),
+                    arrayOf<Any>(position + 1, name, position, if (name == "Wipeout") 1 else 0),
                 )
             }
         }
@@ -122,16 +139,10 @@ abstract class QuizDatabase : RoomDatabase() {
                         "`name` TEXT NOT NULL, `position` INTEGER NOT NULL, " +
                         "`highlightZero` INTEGER NOT NULL)",
                 )
-                seedRounds(db)
+                seedRoundsWithFlag(db)
 
-                db.execSQL(
-                    "CREATE TABLE IF NOT EXISTS `scores` (" +
-                        "`teamId` INTEGER NOT NULL, `roundId` INTEGER NOT NULL, `value` INTEGER NOT NULL, " +
-                        "PRIMARY KEY(`teamId`, `roundId`), " +
-                        "FOREIGN KEY(`teamId`) REFERENCES `teams`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE, " +
-                        "FOREIGN KEY(`roundId`) REFERENCES `rounds`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)",
-                )
-                db.execSQL("CREATE INDEX IF NOT EXISTS `index_scores_roundId` ON `scores` (`roundId`)")
+                db.execSQL(CREATE_SCORES)
+                db.execSQL(CREATE_SCORES_ROUND_INDEX)
                 db.execSQL("INSERT INTO `scores` (teamId, roundId, value) SELECT teamId, roundId, value FROM `_scores_backup`")
                 db.execSQL("DROP TABLE `_scores_backup`")
             }
@@ -155,8 +166,41 @@ abstract class QuizDatabase : RoomDatabase() {
                 // end up with an empty rounds table. Seed it if so.
                 db.query("SELECT COUNT(*) FROM rounds").use { cursor ->
                     val rounds = if (cursor.moveToFirst()) cursor.getInt(0) else 0
-                    if (rounds == 0) seedRounds(db)
+                    if (rounds == 0) seedRoundsWithFlag(db)
                 }
+            }
+        }
+
+        /**
+         * v3 -> v4: drop the per-round `highlightZero` flag. A score of 0 is now
+         * always shown in red, so the flag has nothing left to control.
+         *
+         * `scores` references `rounds`, and SQLite rewrites foreign keys when a table
+         * is renamed — so the scores are stashed while both tables are rebuilt, and
+         * dropped before `rounds` so the implicit delete cannot cascade into them.
+         */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `_scores_backup` " +
+                        "(`teamId` INTEGER NOT NULL, `roundId` INTEGER NOT NULL, `value` INTEGER NOT NULL)",
+                )
+                db.execSQL("INSERT INTO `_scores_backup` (teamId, roundId, value) SELECT teamId, roundId, value FROM `scores`")
+                db.execSQL("DROP TABLE `scores`")
+
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `rounds_new` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`name` TEXT NOT NULL, `position` INTEGER NOT NULL)",
+                )
+                db.execSQL("INSERT INTO `rounds_new` (id, name, position) SELECT id, name, position FROM `rounds`")
+                db.execSQL("DROP TABLE `rounds`")
+                db.execSQL("ALTER TABLE `rounds_new` RENAME TO `rounds`")
+
+                db.execSQL(CREATE_SCORES)
+                db.execSQL(CREATE_SCORES_ROUND_INDEX)
+                db.execSQL("INSERT INTO `scores` (teamId, roundId, value) SELECT teamId, roundId, value FROM `_scores_backup`")
+                db.execSQL("DROP TABLE `_scores_backup`")
             }
         }
 
@@ -183,7 +227,7 @@ abstract class QuizDatabase : RoomDatabase() {
 
         private fun build(context: Context): QuizDatabase =
             Room.databaseBuilder(context, QuizDatabase::class.java, DB_NAME)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .addCallback(SEED_CALLBACK)
                 .build()
     }

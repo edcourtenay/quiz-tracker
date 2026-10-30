@@ -75,8 +75,8 @@ Each is a `SORT()` of the `Scores` table:
   live Subtotal, Total and Position, plus the per-team fee. A summary strip shows
   **Teams / Players / Funds**.
 - **Board** — one leaderboard per configured round. The leader row is green and a
-  score of `0` in a round flagged *"flag a score of 0 in red"* is shown in red —
-  mirroring the sheet's conditional formatting. When teams share a rank the badge
+  score of `0` is always shown in red — mirroring the sheet's conditional
+  formatting. When teams share a rank the badge
   is prefixed with `=` (e.g. `=2`), the usual convention for a tie. Every board
   except the first can be **ordered by the running total through that round (the
   default) or by that round's own result**; the headline number always matches the
@@ -88,7 +88,7 @@ Each is a `SORT()` of the `Scores` table:
 - **Prizes** — the final standings with prizes attached, and a tie-break panel for
   any position shared by qualifying teams. Tapping a team jumps to its Scores card.
 - **Settings** — quiz name, entry fee per player, the **rounds editor** (add,
-  rename, reorder with ↑/↓, toggle the red-zero flag, and delete), the **prizes
+  rename, reorder with ↑/↓, and delete), the **prizes
   editor** (add, rename, revalue, reorder, delete), share results as CSV, clear all
   scores, delete all teams, and an About panel.
 
@@ -116,7 +116,7 @@ rounds and prizes are untouched.
 
 The rounds are **fully configurable** — the three the app shipped with
 ("Rounds 1-4", "Rounds 5-6", "Wipeout") are simply the default seed. Each round
-has a name, a position and a `highlightZero` flag.
+has a name and a position.
 
 Two rules hold the model together:
 
@@ -144,7 +144,8 @@ and never cross).
   skipped (1, 2, 2, 4). Blank scores are unranked.
 
 An absent score means "not entered" (a blank cell), which is deliberately
-different from an entered score of `0` — the red-zero flag depends on it.
+different from an entered score of `0` — a blank cell is unranked, whereas an
+entered `0` counts and is shown in red.
 
 ### Export
 

@@ -284,9 +284,6 @@ internal fun TeamCard(
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (rounds.size >= 2) {
-                    ValueChip("Subtotal", formatScore(score.subtotal), Modifier.weight(1f))
-                }
                 ValueChip("Total", formatScore(score.total), Modifier.weight(1f))
                 ValueChip("Position", formatPosition(score.rankFinal), Modifier.weight(1f))
             }
