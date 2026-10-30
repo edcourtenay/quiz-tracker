@@ -21,11 +21,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,14 +54,13 @@ private data class BoardRow(
 @Composable
 fun LeaderboardScreen(
     state: QuizUiState,
+    selectedBoardIndex: Int,
+    onBoardIndexChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    initialBoardIndex: Int = 0,
     onTeamClick: (Long) -> Unit = {},
 ) {
-    var selected by rememberSaveable {
-        mutableIntStateOf(initialBoardIndex.coerceIn(0, Board.entries.lastIndex))
-    }
     val boards = Board.entries
+    val selected = selectedBoardIndex.coerceIn(0, boards.lastIndex)
     val board = boards[selected]
 
     val rows = remember(state.scores, board) { buildRows(board, state.scores) }
@@ -81,7 +76,7 @@ fun LeaderboardScreen(
             boards.forEachIndexed { index, item ->
                 FilterChip(
                     selected = selected == index,
-                    onClick = { selected = index },
+                    onClick = { onBoardIndexChange(index) },
                     label = { Text(item.label) },
                 )
             }

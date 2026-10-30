@@ -39,6 +39,9 @@ fun QuizTrackerRoot(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    // Remembered here (not inside LeaderboardScreen) so the chosen board survives
+    // switching tabs — e.g. tapping a row to jump to Scores and coming back.
+    var boardIndex by rememberSaveable { mutableIntStateOf(0) }
     val tabs = Tab.entries
 
     Scaffold(
@@ -63,6 +66,8 @@ fun QuizTrackerRoot(
                 Tab.Scores -> TeamsScreen(state = state, viewModel = viewModel)
                 Tab.Leaderboard -> LeaderboardScreen(
                     state = state,
+                    selectedBoardIndex = boardIndex,
+                    onBoardIndexChange = { boardIndex = it },
                     onTeamClick = { teamId ->
                         // Jump to the Scores screen with that team brought into view.
                         viewModel.revealTeam(teamId)

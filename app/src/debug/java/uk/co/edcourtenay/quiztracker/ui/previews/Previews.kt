@@ -71,7 +71,7 @@ private fun ScoresDarkPreview() {
 @Composable
 private fun BoardRounds1to4Preview() {
     QuizTrackerTheme {
-        LeaderboardScreen(state = PreviewData.state(), initialBoardIndex = 0)
+        LeaderboardScreen(state = PreviewData.state(), selectedBoardIndex = 0, onBoardIndexChange = {})
     }
 }
 
@@ -79,7 +79,7 @@ private fun BoardRounds1to4Preview() {
 @Composable
 private fun BoardRounds5to6Preview() {
     QuizTrackerTheme {
-        LeaderboardScreen(state = PreviewData.state(), initialBoardIndex = 1)
+        LeaderboardScreen(state = PreviewData.state(), selectedBoardIndex = 1, onBoardIndexChange = {})
     }
 }
 
@@ -87,7 +87,7 @@ private fun BoardRounds5to6Preview() {
 @Composable
 private fun BoardWipeoutPreview() {
     QuizTrackerTheme {
-        LeaderboardScreen(state = PreviewData.state(), initialBoardIndex = 2)
+        LeaderboardScreen(state = PreviewData.state(), selectedBoardIndex = 2, onBoardIndexChange = {})
     }
 }
 
@@ -95,7 +95,7 @@ private fun BoardWipeoutPreview() {
 @Composable
 private fun BoardFinalPreview() {
     QuizTrackerTheme {
-        LeaderboardScreen(state = PreviewData.state(), initialBoardIndex = 3)
+        LeaderboardScreen(state = PreviewData.state(), selectedBoardIndex = 3, onBoardIndexChange = {})
     }
 }
 
@@ -103,7 +103,7 @@ private fun BoardFinalPreview() {
 @Composable
 private fun BoardTiedRounds14Preview() {
     QuizTrackerTheme {
-        LeaderboardScreen(state = PreviewData.tiedState, initialBoardIndex = 0)
+        LeaderboardScreen(state = PreviewData.tiedState, selectedBoardIndex = 0, onBoardIndexChange = {})
     }
 }
 
@@ -111,7 +111,7 @@ private fun BoardTiedRounds14Preview() {
 @Composable
 private fun BoardTiedFinalPreview() {
     QuizTrackerTheme {
-        LeaderboardScreen(state = PreviewData.tiedState, initialBoardIndex = 3)
+        LeaderboardScreen(state = PreviewData.tiedState, selectedBoardIndex = 3, onBoardIndexChange = {})
     }
 }
 

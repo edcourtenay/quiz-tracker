@@ -78,7 +78,8 @@ Each is a `SORT()` of the `Scores` table:
   Wipeout of 0 is shown in red — mirroring the sheet's conditional formatting.
   When teams share a rank the badge is prefixed with `=` (e.g. `=2`), the usual
   convention for a tie. Tapping a row jumps to that team on the Scores screen,
-  scrolled into view and briefly outlined.
+  scrolled into view and briefly outlined. The board you were viewing is
+  remembered when you navigate away and back.
 - **Settings** — quiz name, entry fee per player, share results as CSV, clear all
   scores (keeps teams), delete all teams, and an About panel.
 
