@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "com.coopers.quiztracker"
+    namespace = "uk.co.edcourtenay.quiztracker"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.coopers.quiztracker"
+        applicationId = "uk.co.edcourtenay.quiztracker"
         minSdk = 31
         targetSdk = 36
         versionCode = 1

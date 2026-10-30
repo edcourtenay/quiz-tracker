@@ -65,7 +65,7 @@ Each is a `SORT()` of the `Scores` table:
 | Language / UI | Kotlin + Jetpack Compose (Material 3) |
 | Data | Local only, offline (Room / SQLite) |
 | App name | Quiz Tracker |
-| Package | `com.coopers.quiztracker` |
+| Package | `uk.co.edcourtenay.quiztracker` |
 | minSdk / targetSdk | 31 (Android 12) / 36 |
 
 ### Screens
@@ -105,14 +105,14 @@ sheet (through a `FileProvider`).
 ## 3. Project layout
 
 ```
-app/src/main/java/com/coopers/quiztracker/
+app/src/main/java/uk/co/edcourtenay/quiztracker/
 ├── MainActivity.kt            # Compose entry point
 ├── QuizTrackerApp.kt          # Application: database + repository
 ├── data/                      # Room entities, DAO, database, repository
 ├── domain/Scoring.kt          # The score/rank engine (ported from the sheet)
 ├── export/ResultsExporter.kt  # CSV export + share intent
 └── ui/                        # ViewModel, root nav, screens, theme, components
-app/src/debug/java/com/coopers/quiztracker/ui/previews/   # @Preview-only code
+app/src/debug/java/uk/co/edcourtenay/quiztracker/ui/previews/   # @Preview-only code
 app/src/test/java/.../domain/ScoringTest.kt   # Sheet-parity unit tests
 ```
 
