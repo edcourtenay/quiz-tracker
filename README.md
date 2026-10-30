@@ -85,9 +85,32 @@ Each is a `SORT()` of the `Scores` table:
   screen, scrolled into view and briefly outlined, with the matching score focused
   for input and its current value selected. The board you were viewing is
   remembered when you navigate away and back.
+- **Prizes** — the final standings with prizes attached, and a tie-break panel for
+  any position shared by qualifying teams. Tapping a team jumps to its Scores card.
 - **Settings** — quiz name, entry fee per player, the **rounds editor** (add,
-  rename, reorder with ↑/↓, toggle the red-zero flag, and delete), share results
-  as CSV, clear all scores, delete all teams, and an About panel.
+  rename, reorder with ↑/↓, toggle the red-zero flag, and delete), the **prizes
+  editor** (add, rename, revalue, reorder, delete), share results as CSV, clear all
+  scores, delete all teams, and an About panel.
+
+### Prizes and tie-break
+
+Prizes are a configurable list (name + optional value, so non-cash prizes work),
+awarded to the top-scoring teams once every round has been scored.
+
+A tie only matters where it touches the prizes, so a position is **contested** when
+two or more teams share it *and* at least one prize falls on it. Each contested
+position gets a **closest-number** tie-break: the host records the question, each
+tied team's guess, and finally the correct value. The guesses are ranked by
+distance, which settles the whole group — including a group larger than the slots
+remaining, where the furthest guess misses out.
+
+Rules: an exact match wins; otherwise the **lower** guess wins (the usual pub-quiz
+convention). If two teams give the *same* guess the tie cannot be separated, so the
+app says so rather than inventing an order. Tie-breaks are cleared whenever a score
+changes, since the ties may have moved.
+
+Deleting all teams removes their scores and their tie-break answers; the configured
+rounds and prizes are untouched.
 
 ### Rounds
 
@@ -127,8 +150,9 @@ different from an entered score of `0` — the red-zero flag depends on it.
 
 `export/ResultsExporter.kt` writes a CSV with one score and rank column per
 configured round, plus Subtotal (when there is more than one round), Total and
-Final Position, and shares it via the system share sheet (through a
-`FileProvider`).
+Final Position — and a **Prize** column when prizes are configured, in which case
+rows are ordered by the resolved standings so a decided tie-break is reflected.
+It is shared via the system share sheet (through a `FileProvider`).
 
 ---
 
@@ -156,6 +180,7 @@ composable that takes plain state plus callbacks. The stateless ones are what th
 |---|---|
 | `TeamsScreen(state, viewModel)` | `TeamsScreenContent(state, …)` |
 | `SettingsScreen(state, viewModel)` | `SettingsScreenContent(state, …)` |
+| `PrizesScreen(state, viewModel, …)` | `PrizesScreenContent(state, …)` |
 | `LeaderboardScreen(state, …)` | same composable, `selectedBoardId` + `orderByRunningTotal` |
 
 The previews live in `app/src/debug/` so they are compiled into the debug variant
@@ -164,8 +189,9 @@ build). Sample data is centralised in `PreviewData`, so adding a new preview is
 just a matter of pointing it at `PreviewData.state()`.
 
 Previewed today: Scores (empty / populated / dark / revealed team), the board in
-both ordering modes, a tied board, Settings (including the rounds editor), and the
-summary and team cards as individual components. Open any file under
+both ordering modes, a tied board, Prizes (none configured / awarded / tie-break
+pending / tie-break resolved), Settings (including the rounds and prizes editors),
+and the summary and team cards as individual components. Open any file under
 `app/src/debug/.../ui/previews/` and use the **Split** or **Design** view in
 Android Studio.
 

@@ -50,16 +50,23 @@ object ResultsExporter {
                     if (rounds.size >= 2) add("Subtotal")
                     add("Total")
                     add("Final Position")
+                    if (state.prizes.isNotEmpty()) add("Prize")
                 },
             ),
         )
 
-        val ordered = state.scores.sortedWith(
-            compareBy(
-                { it.rankFinal ?: Int.MAX_VALUE },
-                { it.team.createdAt },
-            ),
-        )
+        // Order by the resolved standings when prizes are configured, so a decided
+        // tie-break is reflected in the row order; otherwise by final position.
+        val standings = state.standings
+        val ordered = if (state.prizes.isNotEmpty()) {
+            standings.order + state.scores.filter { it.rankFinal == null }
+                .sortedWith(compareBy({ it.team.createdAt }))
+        } else {
+            state.scores.sortedWith(
+                compareBy({ it.rankFinal ?: Int.MAX_VALUE }, { it.team.createdAt }),
+            )
+        }
+
         ordered.forEach { score ->
             sb.appendLine(
                 csvRow(
@@ -74,6 +81,9 @@ object ResultsExporter {
                         if (rounds.size >= 2) add(score.subtotal?.toString() ?: "")
                         add(score.total?.toString() ?: "")
                         add(score.rankFinal?.toString() ?: "")
+                        if (state.prizes.isNotEmpty()) {
+                            add(standings.prizeByTeam[score.team.id]?.name ?: "")
+                        }
                     },
                 ),
             )

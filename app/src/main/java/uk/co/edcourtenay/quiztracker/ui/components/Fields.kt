@@ -76,8 +76,55 @@ fun NumberField(
     )
 }
 
-/** A small label/value tile used for the summary strip and computed values. */
+/**
+ * A field for a decimal value, used for tie-break guesses and correct answers.
+ * An empty field maps to `null`.
+ */
 @Composable
+fun DecimalField(
+    value: Double?,
+    label: String,
+    onValueChange: (Double?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var field by remember(value) {
+        val text = formatDecimal(value)
+        mutableStateOf(TextFieldValue(text, TextRange(text.length)))
+    }
+
+    OutlinedTextField(
+        value = field,
+        onValueChange = { input ->
+            val cleaned = cleanDecimal(input.text)
+            field = if (cleaned == input.text) {
+                input
+            } else {
+                TextFieldValue(cleaned, TextRange(cleaned.length))
+            }
+            onValueChange(cleaned.toDoubleOrNull())
+        },
+        label = { Text(label) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        modifier = modifier,
+    )
+}
+
+/** Keeps digits and at most one decimal point. */
+private fun cleanDecimal(input: String): String {
+    val digitsAndDots = input.filter { it.isDigit() || it == '.' }
+    val firstDot = digitsAndDots.indexOf('.')
+    if (firstDot < 0) return digitsAndDots
+    return digitsAndDots.take(firstDot + 1) + digitsAndDots.drop(firstDot + 1).replace(".", "")
+}
+
+private fun formatDecimal(value: Double?): String = when {
+    value == null -> ""
+    value % 1.0 == 0.0 -> value.toLong().toString()
+    else -> value.toString()
+}
+
+/** A small label/value tile used for the summary strip and computed values. */@Composable
 fun StatTile(
     label: String,
     value: String,

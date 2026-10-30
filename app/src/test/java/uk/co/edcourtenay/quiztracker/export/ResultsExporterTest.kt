@@ -1,10 +1,13 @@
 package uk.co.edcourtenay.quiztracker.export
 
 import uk.co.edcourtenay.quiztracker.data.ConfigEntity
+import uk.co.edcourtenay.quiztracker.data.PrizeEntity
 import uk.co.edcourtenay.quiztracker.data.RoundEntity
 import uk.co.edcourtenay.quiztracker.data.ScoreEntity
 import uk.co.edcourtenay.quiztracker.data.TeamEntity
+import uk.co.edcourtenay.quiztracker.domain.Prizes
 import uk.co.edcourtenay.quiztracker.domain.Scoring
+import uk.co.edcourtenay.quiztracker.domain.TieBreakState
 import uk.co.edcourtenay.quiztracker.ui.QuizUiState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -21,13 +24,24 @@ class ResultsExporterTest {
     private fun team(id: Long, name: String, players: Int?) =
         TeamEntity(id = id, name = name, players = players, createdAt = id)
 
-    private fun stateOf(rounds: List<RoundEntity>, teams: List<TeamEntity>, scores: List<ScoreEntity>) =
-        QuizUiState(
+    private fun stateOf(
+        rounds: List<RoundEntity>,
+        teams: List<TeamEntity>,
+        scores: List<ScoreEntity>,
+        prizes: List<PrizeEntity> = emptyList(),
+        tieBreaks: Map<Int, TieBreakState> = emptyMap(),
+    ): QuizUiState {
+        val scored = Scoring.scoreTeams(teams, rounds, scores, feePerPlayer = 2.0)
+        return QuizUiState(
             teams = teams,
             rounds = rounds,
-            scores = Scoring.scoreTeams(teams, rounds, scores, feePerPlayer = 2.0),
+            scores = scored,
+            prizes = prizes,
+            standings = Prizes.standings(scored, prizes, tieBreaks),
+            tieBreaks = tieBreaks,
             config = ConfigEntity(quizName = "Test Quiz", feePerPlayer = 2.0),
         )
+    }
 
     @Test
     fun `csv has a column per round and is ordered by final position`() {
@@ -95,5 +109,39 @@ class ResultsExporterTest {
         val csv = ResultsExporter.buildCsv(stateOf(rounds, teams, scores))
 
         assertTrue(csv.contains("\"Smith, Jones & Co\""))
+    }
+
+    @Test
+    fun `a prize column appears when prizes are configured`() {
+        val single = listOf(RoundEntity(id = 1, name = "Final", position = 0))
+        val prizes = listOf(
+            PrizeEntity(id = 1, name = "1st", value = 50.0, position = 0),
+            PrizeEntity(id = 2, name = "2nd", value = 30.0, position = 1),
+        )
+        val teams = listOf(team(1, "Alpha", 2), team(2, "Bravo", 2), team(3, "Charlie", 2))
+        val scores = listOf(
+            ScoreEntity(1, 1, 40),
+            ScoreEntity(2, 1, 35),
+            ScoreEntity(3, 1, 30),
+        )
+
+        val csv = ResultsExporter.buildCsv(stateOf(single, teams, scores, prizes))
+        val lines = csv.trim().split("\n")
+
+        assertEquals("Team Name,Players,Amount,Final,Final Rank,Total,Final Position,Prize", lines[3])
+        assertEquals("Alpha,2,4.00,40,1,40,1,1st", lines[4])
+        assertEquals("Bravo,2,4.00,35,2,35,2,2nd", lines[5])
+        assertEquals("Charlie,2,4.00,30,3,30,3,", lines[6])
+    }
+
+    @Test
+    fun `no prize column when no prizes are configured`() {
+        val teams = listOf(team(1, "Alpha", 2))
+        val scores = listOf(ScoreEntity(1, 1, 5))
+
+        val csv = ResultsExporter.buildCsv(stateOf(rounds, teams, scores))
+        val lines = csv.trim().split("\n")
+
+        assertTrue(!lines[3].contains("Prize"))
     }
 }

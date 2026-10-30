@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -41,10 +42,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import uk.co.edcourtenay.quiztracker.data.PrizeEntity
 import uk.co.edcourtenay.quiztracker.data.RoundEntity
 import uk.co.edcourtenay.quiztracker.export.ResultsExporter
 import uk.co.edcourtenay.quiztracker.ui.QuizUiState
 import uk.co.edcourtenay.quiztracker.ui.QuizViewModel
+import uk.co.edcourtenay.quiztracker.ui.components.DecimalField
 import uk.co.edcourtenay.quiztracker.ui.formatMoney
 
 @Composable
@@ -65,6 +68,10 @@ fun SettingsScreen(
         onToggleRoundHighlightZero = { round, flag -> viewModel.setRoundHighlightZero(round, flag) },
         onDeleteRound = { viewModel.deleteRound(it) },
         onCountScoresForRound = { viewModel.countScoresForRound(it) },
+        onAddPrize = { viewModel.addPrize() },
+        onUpdatePrize = { viewModel.updatePrize(it) },
+        onMovePrize = { prize, offset -> viewModel.movePrize(prize, offset) },
+        onDeletePrize = { viewModel.deletePrize(it) },
         modifier = modifier,
     )
 }
@@ -86,6 +93,10 @@ internal fun SettingsScreenContent(
     onToggleRoundHighlightZero: (RoundEntity, Boolean) -> Unit = { _, _ -> },
     onDeleteRound: (RoundEntity) -> Unit = {},
     onCountScoresForRound: suspend (Long) -> Int = { 0 },
+    onAddPrize: () -> Unit = {},
+    onUpdatePrize: (PrizeEntity) -> Unit = {},
+    onMovePrize: (PrizeEntity, Int) -> Unit = { _, _ -> },
+    onDeletePrize: (PrizeEntity) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -172,6 +183,47 @@ internal fun SettingsScreenContent(
                 ) {
                     Icon(Icons.Filled.Add, contentDescription = null)
                     Text("  Add round")
+                }
+            }
+        }
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text("Prizes", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = "Awarded to the top-scoring teams once every round has been " +
+                        "scored. Leave the value blank for a non-cash prize.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp),
+                )
+
+                state.prizes.forEachIndexed { index, prize ->
+                    PrizeRow(
+                        prize = prize,
+                        canMoveUp = index > 0,
+                        canMoveDown = index < state.prizes.lastIndex,
+                        onNameChange = { onUpdatePrize(prize.copy(name = it)) },
+                        onValueChange = { onUpdatePrize(prize.copy(value = it)) },
+                        onMoveUp = { onMovePrize(prize, -1) },
+                        onMoveDown = { onMovePrize(prize, 1) },
+                        onDelete = { onDeletePrize(prize) },
+                    )
+                }
+
+                Button(
+                    onClick = onAddPrize,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = null)
+                    Text("  Add prize")
                 }
             }
         }
@@ -293,6 +345,76 @@ internal fun SettingsScreenContent(
             onDismiss = { pendingRoundDelete = null },
         )
     }
+}
+
+@Composable
+private fun PrizeRow(
+    prize: PrizeEntity,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    onNameChange: (String) -> Unit,
+    onValueChange: (Double?) -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onMoveUp, enabled = canMoveUp) {
+                Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Move up")
+            }
+            IconButton(onClick = onMoveDown, enabled = canMoveDown) {
+                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Move down")
+            }
+            PrizeNameField(
+                prizeId = prize.id,
+                initialName = prize.name,
+                onNameChange = onNameChange,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = onDelete) {
+                Icon(
+                    Icons.Filled.Delete,
+                    contentDescription = "Delete prize",
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+
+        DecimalField(
+            value = prize.value,
+            label = "Value (£)",
+            onValueChange = onValueChange,
+            modifier = Modifier
+                .padding(start = 8.dp, end = 8.dp, bottom = 4.dp)
+                .width(160.dp),
+        )
+    }
+}
+
+@Composable
+private fun PrizeNameField(
+    prizeId: Long,
+    initialName: String,
+    onNameChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // Local state so the cursor does not jump while Room round-trips.
+    var text by remember(prizeId) { mutableStateOf(initialName) }
+
+    OutlinedTextField(
+        value = text,
+        onValueChange = {
+            text = it
+            onNameChange(it)
+        },
+        label = { Text("Prize") },
+        singleLine = true,
+        modifier = modifier,
+    )
 }
 
 @Composable

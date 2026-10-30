@@ -7,11 +7,18 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import uk.co.edcourtenay.quiztracker.QuizTrackerApp
 import uk.co.edcourtenay.quiztracker.data.ConfigEntity
+import uk.co.edcourtenay.quiztracker.data.PrizeEntity
 import uk.co.edcourtenay.quiztracker.data.QuizRepository
 import uk.co.edcourtenay.quiztracker.data.RoundEntity
+import uk.co.edcourtenay.quiztracker.data.ScoreEntity
 import uk.co.edcourtenay.quiztracker.data.TeamEntity
+import uk.co.edcourtenay.quiztracker.data.TieBreakAnswerEntity
+import uk.co.edcourtenay.quiztracker.data.TieBreakEntity
+import uk.co.edcourtenay.quiztracker.domain.Prizes
 import uk.co.edcourtenay.quiztracker.domain.Scoring
+import uk.co.edcourtenay.quiztracker.domain.Standings
 import uk.co.edcourtenay.quiztracker.domain.TeamScore
+import uk.co.edcourtenay.quiztracker.domain.TieBreakState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -24,11 +31,22 @@ data class QuizUiState(
     val teams: List<TeamEntity> = emptyList(),
     val rounds: List<RoundEntity> = emptyList(),
     val scores: List<TeamScore> = emptyList(),
+    val prizes: List<PrizeEntity> = emptyList(),
+    val standings: Standings = Standings(
+        complete = false,
+        awards = emptyList(),
+        order = emptyList(),
+        prizeByTeam = emptyMap(),
+        contested = emptyList(),
+    ),
+    /** Tie-break question and answers per contested final position. */
+    val tieBreaks: Map<Int, TieBreakState> = emptyMap(),
     val config: ConfigEntity = ConfigEntity.Default,
 ) {
     val teamCount: Int get() = teams.size
     val totalPlayers: Int get() = teams.sumOf { it.players ?: 0 }
     val totalFunds: Double get() = scores.sumOf { it.amount ?: 0.0 }
+    val totalPrizeValue: Double get() = prizes.sumOf { it.value ?: 0.0 }
 }
 
 /** A one-shot request to reveal a team on the Scores screen. */
@@ -38,26 +56,67 @@ data class RevealRequest(
     val roundId: Long?,
 )
 
+private data class QuizData(
+    val teams: List<TeamEntity>,
+    val rounds: List<RoundEntity>,
+    val scores: List<ScoreEntity>,
+    val config: ConfigEntity,
+)
+
+private data class PrizeData(
+    val prizes: List<PrizeEntity>,
+    val tieBreaks: List<TieBreakEntity>,
+    val answers: List<TieBreakAnswerEntity>,
+)
+
 class QuizViewModel(private val repository: QuizRepository) : ViewModel() {
 
+    private val quizData = combine(
+        repository.teams,
+        repository.rounds,
+        repository.scores,
+        repository.config,
+    ) { teams, rounds, scores, config -> QuizData(teams, rounds, scores, config) }
+
+    private val prizeData = combine(
+        repository.prizes,
+        repository.tieBreaks,
+        repository.tieBreakAnswers,
+    ) { prizes, tieBreaks, answers -> PrizeData(prizes, tieBreaks, answers) }
+
     val uiState: StateFlow<QuizUiState> =
-        combine(
-            repository.teams,
-            repository.rounds,
-            repository.scores,
-            repository.config,
-        ) { teams, rounds, scoreRows, config ->
+        combine(quizData, prizeData) { quiz, prize ->
+            val scores = Scoring.scoreTeams(quiz.teams, quiz.rounds, quiz.scores, quiz.config.feePerPlayer)
+            val tieBreaks = tieBreakStates(prize)
             QuizUiState(
-                teams = teams,
-                rounds = rounds,
-                scores = Scoring.scoreTeams(teams, rounds, scoreRows, config.feePerPlayer),
-                config = config,
+                teams = quiz.teams,
+                rounds = quiz.rounds,
+                scores = scores,
+                prizes = prize.prizes,
+                standings = Prizes.standings(scores, prize.prizes, tieBreaks),
+                tieBreaks = tieBreaks,
+                config = quiz.config,
             )
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = QuizUiState(),
         )
+
+    /** Tie-break state per contested rank, merging the question row with its answers. */
+    private fun tieBreakStates(data: PrizeData): Map<Int, TieBreakState> {
+        val ranks = (data.tieBreaks.map { it.rank } + data.answers.map { it.rank }).distinct()
+        return ranks.associateWith { rank ->
+            val row = data.tieBreaks.firstOrNull { it.rank == rank }
+            TieBreakState(
+                question = row?.question.orEmpty(),
+                correctAnswer = row?.correctAnswer,
+                answers = data.answers
+                    .filter { it.rank == rank }
+                    .associate { it.teamId to it.answer },
+            )
+        }
+    }
 
     // ---------------------------------------------------------------------
     // Teams
@@ -159,6 +218,43 @@ class QuizViewModel(private val repository: QuizRepository) : ViewModel() {
     /** Clears every entered score. Teams and rounds are kept. */
     fun clearAllScores() = viewModelScope.launch {
         repository.clearAllScores()
+    }
+
+    // ---------------------------------------------------------------------
+    // Prizes
+    // ---------------------------------------------------------------------
+
+    fun addPrize() = viewModelScope.launch {
+        val position = uiState.value.prizes.size + 1
+        repository.addPrize(name = "$position")
+    }
+
+    fun updatePrize(prize: PrizeEntity) = viewModelScope.launch {
+        repository.updatePrize(prize)
+    }
+
+    fun movePrize(prize: PrizeEntity, offset: Int) = viewModelScope.launch {
+        repository.movePrize(prize, offset)
+    }
+
+    fun deletePrize(prize: PrizeEntity) = viewModelScope.launch {
+        repository.deletePrize(prize)
+    }
+
+    // ---------------------------------------------------------------------
+    // Tie-breaks
+    // ---------------------------------------------------------------------
+
+    fun setTieBreakQuestion(rank: Int, question: String) = viewModelScope.launch {
+        repository.setTieBreakQuestion(rank, question)
+    }
+
+    fun setTieBreakAnswer(rank: Int, teamId: Long, answer: Double?) = viewModelScope.launch {
+        repository.setTieBreakAnswer(rank, teamId, answer)
+    }
+
+    fun setTieBreakCorrectAnswer(rank: Int, answer: Double?) = viewModelScope.launch {
+        repository.setTieBreakCorrectAnswer(rank, answer)
     }
 
     // ---------------------------------------------------------------------

@@ -75,6 +75,60 @@ interface QuizDao {
     suspend fun countScoresForRound(roundId: Long): Int
 
     // ---------------------------------------------------------------------
+    // Prizes
+    // ---------------------------------------------------------------------
+
+    @Query("SELECT * FROM prizes ORDER BY position ASC, id ASC")
+    fun observePrizes(): Flow<List<PrizeEntity>>
+
+    @Query("SELECT * FROM prizes ORDER BY position ASC, id ASC")
+    suspend fun getPrizes(): List<PrizeEntity>
+
+    @Insert
+    suspend fun insertPrize(prize: PrizeEntity): Long
+
+    @Update
+    suspend fun updatePrize(prize: PrizeEntity)
+
+    @Delete
+    suspend fun deletePrize(prize: PrizeEntity)
+
+    @Query("UPDATE prizes SET position = :position WHERE id = :prizeId")
+    suspend fun updatePrizePosition(prizeId: Long, position: Int)
+
+    // ---------------------------------------------------------------------
+    // Tie-breaks
+    // ---------------------------------------------------------------------
+
+    @Query("SELECT * FROM tiebreaks")
+    fun observeTieBreaks(): Flow<List<TieBreakEntity>>
+
+    @Query("SELECT * FROM tiebreaks WHERE rank = :rank")
+    suspend fun getTieBreak(rank: Int): TieBreakEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertTieBreak(tieBreak: TieBreakEntity)
+
+    @Query("DELETE FROM tiebreaks WHERE rank = :rank")
+    suspend fun deleteTieBreak(rank: Int)
+
+    @Query("SELECT * FROM tiebreak_answers")
+    fun observeTieBreakAnswers(): Flow<List<TieBreakAnswerEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertTieBreakAnswer(answer: TieBreakAnswerEntity)
+
+    @Query("DELETE FROM tiebreak_answers WHERE rank = :rank AND teamId = :teamId")
+    suspend fun deleteTieBreakAnswer(rank: Int, teamId: Long)
+
+    /** Drops every tie-break; used when a score changes and the ties may have moved. */
+    @Query("DELETE FROM tiebreaks")
+    suspend fun clearTieBreaks()
+
+    @Query("DELETE FROM tiebreak_answers")
+    suspend fun clearTieBreakAnswers()
+
+    // ---------------------------------------------------------------------
     // Config
     // ---------------------------------------------------------------------
 

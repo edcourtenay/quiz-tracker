@@ -16,6 +16,7 @@ import uk.co.edcourtenay.quiztracker.ui.components.NumberField
 import uk.co.edcourtenay.quiztracker.ui.components.StatTile
 import uk.co.edcourtenay.quiztracker.ui.components.ValueChip
 import uk.co.edcourtenay.quiztracker.ui.screens.LeaderboardScreen
+import uk.co.edcourtenay.quiztracker.ui.screens.PrizesScreenContent
 import uk.co.edcourtenay.quiztracker.ui.screens.SettingsScreenContent
 import uk.co.edcourtenay.quiztracker.ui.screens.SummaryCard
 import uk.co.edcourtenay.quiztracker.ui.screens.TeamCard
@@ -145,11 +146,47 @@ private fun BoardTiedPreview() {
 // Settings screen
 // ---------------------------------------------------------------------------
 
-@Preview(name = "Settings", showBackground = true, heightDp = 1600)
+@Preview(name = "Settings", showBackground = true, heightDp = 2000)
 @Composable
 private fun SettingsPreview() {
     QuizTrackerTheme {
-        SettingsScreenContent(state = PreviewData.state())
+        SettingsScreenContent(state = PreviewData.state(prizes = PreviewData.prizes))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Prizes screen
+// ---------------------------------------------------------------------------
+
+@Preview(name = "Prizes – no prizes configured", showBackground = true, heightDp = 700)
+@Composable
+private fun PrizesEmptyPreview() {
+    QuizTrackerTheme {
+        PrizesScreenContent(state = PreviewData.state())
+    }
+}
+
+@Preview(name = "Prizes – awarded", showBackground = true, heightDp = 900)
+@Composable
+private fun PrizesAwardedPreview() {
+    QuizTrackerTheme {
+        PrizesScreenContent(state = PreviewData.prizesAwardedState)
+    }
+}
+
+@Preview(name = "Prizes – tie-break pending", showBackground = true, heightDp = 1300)
+@Composable
+private fun PrizesTieBreakPreview() {
+    QuizTrackerTheme {
+        PrizesScreenContent(state = PreviewData.tiedForPrizesState)
+    }
+}
+
+@Preview(name = "Prizes – tie-break resolved", showBackground = true, heightDp = 1300)
+@Composable
+private fun PrizesTieBreakResolvedPreview() {
+    QuizTrackerTheme {
+        PrizesScreenContent(state = PreviewData.tieBreakResolvedState)
     }
 }
 

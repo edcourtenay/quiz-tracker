@@ -8,8 +8,16 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [TeamEntity::class, RoundEntity::class, ScoreEntity::class, ConfigEntity::class],
-    version = 2,
+    entities = [
+        TeamEntity::class,
+        RoundEntity::class,
+        ScoreEntity::class,
+        PrizeEntity::class,
+        TieBreakEntity::class,
+        TieBreakAnswerEntity::class,
+        ConfigEntity::class,
+    ],
+    version = 3,
     exportSchema = true,
 )
 abstract class QuizDatabase : RoomDatabase() {
@@ -25,6 +33,46 @@ abstract class QuizDatabase : RoomDatabase() {
             Triple("Rounds 5-6", 1, 0),
             Triple("Wipeout", 2, 1),
         )
+
+        /** A starting set of prizes; the host sets the values. */
+        private val SEEDED_PRIZES = listOf("1st", "2nd", "3rd")
+
+        private const val CREATE_PRIZES =
+            "CREATE TABLE IF NOT EXISTS `prizes` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`name` TEXT NOT NULL, `value` REAL, `position` INTEGER NOT NULL)"
+
+        private const val CREATE_TIEBREAKS =
+            "CREATE TABLE IF NOT EXISTS `tiebreaks` (" +
+                "`rank` INTEGER NOT NULL, `question` TEXT NOT NULL, " +
+                "`correctAnswer` REAL, PRIMARY KEY(`rank`))"
+
+        private const val CREATE_TIEBREAK_ANSWERS =
+            "CREATE TABLE IF NOT EXISTS `tiebreak_answers` (" +
+                "`rank` INTEGER NOT NULL, `teamId` INTEGER NOT NULL, `answer` REAL NOT NULL, " +
+                "PRIMARY KEY(`rank`, `teamId`), " +
+                "FOREIGN KEY(`teamId`) REFERENCES `teams`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)"
+
+        private const val CREATE_TIEBREAK_ANSWERS_INDEX =
+            "CREATE INDEX IF NOT EXISTS `index_tiebreak_answers_teamId` ON `tiebreak_answers` (`teamId`)"
+
+        private fun seedPrizes(db: SupportSQLiteDatabase) {
+            SEEDED_PRIZES.forEachIndexed { position, name ->
+                db.execSQL(
+                    "INSERT INTO `prizes` (name, value, position) VALUES (?, NULL, ?)",
+                    arrayOf<Any>(name, position),
+                )
+            }
+        }
+
+        private fun seedRounds(db: SupportSQLiteDatabase) {
+            SEEDED_ROUNDS.forEachIndexed { index, (name, position, highlightZero) ->
+                db.execSQL(
+                    "INSERT INTO `rounds` (id, name, position, highlightZero) VALUES (?, ?, ?, ?)",
+                    arrayOf<Any>(index + 1, name, position, highlightZero),
+                )
+            }
+        }
 
         /**
          * v1 -> v2: rounds become configurable.
@@ -74,12 +122,7 @@ abstract class QuizDatabase : RoomDatabase() {
                         "`name` TEXT NOT NULL, `position` INTEGER NOT NULL, " +
                         "`highlightZero` INTEGER NOT NULL)",
                 )
-                SEEDED_ROUNDS.forEachIndexed { index, (name, position, highlightZero) ->
-                    db.execSQL(
-                        "INSERT INTO `rounds` (id, name, position, highlightZero) VALUES (?, ?, ?, ?)",
-                        arrayOf<Any>(index + 1, name, position, highlightZero),
-                    )
-                }
+                seedRounds(db)
 
                 db.execSQL(
                     "CREATE TABLE IF NOT EXISTS `scores` (" +
@@ -94,6 +137,42 @@ abstract class QuizDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v2 -> v3: prizes and tie-breaks.
+         *
+         * Both are new, so there is nothing to copy across — but the default prize
+         * set is seeded here to match what a fresh install gets.
+         */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(CREATE_PRIZES)
+                db.execSQL(CREATE_TIEBREAKS)
+                db.execSQL(CREATE_TIEBREAK_ANSWERS)
+                db.execSQL(CREATE_TIEBREAK_ANSWERS_INDEX)
+                seedPrizes(db)
+
+                // Defensive: v2 had no create-callback, so a *fresh* v2 install could
+                // end up with an empty rounds table. Seed it if so.
+                db.query("SELECT COUNT(*) FROM rounds").use { cursor ->
+                    val rounds = if (cursor.moveToFirst()) cursor.getInt(0) else 0
+                    if (rounds == 0) seedRounds(db)
+                }
+            }
+        }
+
+        /**
+         * A fresh database gets the same starting rounds and prizes as an upgraded
+         * one. Without this, a clean install has an empty rounds table (no score
+         * fields at all), since the rounds are otherwise only seeded by the
+         * v1 -> v2 migration.
+         */
+        private val SEED_CALLBACK = object : RoomDatabase.Callback() {
+            override fun onCreate(db: SupportSQLiteDatabase) {
+                seedRounds(db)
+                seedPrizes(db)
+            }
+        }
+
         @Volatile
         private var instance: QuizDatabase? = null
 
@@ -104,7 +183,8 @@ abstract class QuizDatabase : RoomDatabase() {
 
         private fun build(context: Context): QuizDatabase =
             Room.databaseBuilder(context, QuizDatabase::class.java, DB_NAME)
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addCallback(SEED_CALLBACK)
                 .build()
     }
 }

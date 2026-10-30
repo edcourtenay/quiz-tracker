@@ -18,6 +18,15 @@ class QuizRepository(private val dao: QuizDao) {
     /** Every entered score. */
     val scores: Flow<List<ScoreEntity>> = dao.observeScores()
 
+    /** Configured prizes, in award order. */
+    val prizes: Flow<List<PrizeEntity>> = dao.observePrizes()
+
+    /** Tie-break questions and correct answers, keyed by contested final position. */
+    val tieBreaks: Flow<List<TieBreakEntity>> = dao.observeTieBreaks()
+
+    /** Tie-break guesses, one per tied team. */
+    val tieBreakAnswers: Flow<List<TieBreakAnswerEntity>> = dao.observeTieBreakAnswers()
+
     /** Config, falling back to defaults until the user changes something. */
     val config: Flow<ConfigEntity> = dao.observeConfig().map { it ?: ConfigEntity.Default }
 
@@ -89,10 +98,80 @@ class QuizRepository(private val dao: QuizDao) {
         } else {
             dao.upsertScore(ScoreEntity(teamId = teamId, roundId = roundId, value = value))
         }
+        // The ties — and therefore the tie-breaks — may have moved.
+        clearTieBreaks()
     }
 
     /** Clears every entered score. Teams and rounds are left alone. */
-    suspend fun clearAllScores() = dao.clearAllScores()
+    suspend fun clearAllScores() {
+        dao.clearAllScores()
+        clearTieBreaks()
+    }
+
+    // ---------------------------------------------------------------------
+    // Prizes
+    // ---------------------------------------------------------------------
+
+    /** Appends a new prize after the last one. */
+    suspend fun addPrize(name: String): Long {
+        val position = dao.getPrizes().size
+        return dao.insertPrize(PrizeEntity(name = name, position = position))
+    }
+
+    suspend fun updatePrize(prize: PrizeEntity) = dao.updatePrize(prize)
+
+    /**
+     * Moves [prize] one place earlier or later, rewriting the positions of the
+     * affected prizes so the award order stays 0..n-1.
+     */
+    suspend fun movePrize(prize: PrizeEntity, offset: Int) {
+        val ordered = dao.getPrizes()
+        val from = ordered.indexOfFirst { it.id == prize.id }
+        val to = from + offset
+        if (from < 0 || to !in ordered.indices) return
+
+        val reordered = ordered.toMutableList().apply { add(to, removeAt(from)) }
+        reordered.forEachIndexed { position, item ->
+            if (item.position != position) dao.updatePrizePosition(item.id, position)
+        }
+    }
+
+    suspend fun deletePrize(prize: PrizeEntity) {
+        dao.deletePrize(prize)
+        dao.getPrizes().forEachIndexed { position, item ->
+            if (item.position != position) dao.updatePrizePosition(item.id, position)
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Tie-breaks
+    // ---------------------------------------------------------------------
+
+    suspend fun setTieBreakQuestion(rank: Int, question: String) {
+        val existing = dao.getTieBreak(rank)
+        dao.upsertTieBreak(TieBreakEntity(rank = rank, question = question, correctAnswer = existing?.correctAnswer))
+    }
+
+    suspend fun setTieBreakAnswer(rank: Int, teamId: Long, answer: Double?) {
+        if (answer == null) {
+            dao.deleteTieBreakAnswer(rank, teamId)
+        } else {
+            dao.upsertTieBreakAnswer(TieBreakAnswerEntity(rank, teamId, answer))
+        }
+    }
+
+    suspend fun setTieBreakCorrectAnswer(rank: Int, correctAnswer: Double?) {
+        val existing = dao.getTieBreak(rank)
+        dao.upsertTieBreak(
+            TieBreakEntity(rank = rank, question = existing?.question.orEmpty(), correctAnswer = correctAnswer),
+        )
+    }
+
+    /** Drops every tie-break; called whenever a score changes. */
+    suspend fun clearTieBreaks() {
+        dao.clearTieBreakAnswers()
+        dao.clearTieBreaks()
+    }
 
     // ---------------------------------------------------------------------
     // Config

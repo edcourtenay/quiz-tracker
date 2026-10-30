@@ -3,6 +3,7 @@ package uk.co.edcourtenay.quiztracker.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
@@ -24,12 +25,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import uk.co.edcourtenay.quiztracker.ui.screens.LeaderboardScreen
+import uk.co.edcourtenay.quiztracker.ui.screens.PrizesScreen
 import uk.co.edcourtenay.quiztracker.ui.screens.SettingsScreen
 import uk.co.edcourtenay.quiztracker.ui.screens.TeamsScreen
 
 private enum class Tab(val label: String, val icon: ImageVector) {
     Scores("Scores", Icons.Filled.Edit),
-    Leaderboard("Board", Icons.Filled.Star),
+    Leaderboard("Board", Icons.AutoMirrored.Filled.List),
+    Prizes("Prizes", Icons.Filled.Star),
     Settings("Settings", Icons.Filled.Settings),
 }
 
@@ -76,6 +79,15 @@ fun QuizTrackerRoot(
                         // Jump to the Scores screen with that team brought into
                         // view and the matching score focused for input.
                         viewModel.revealTeam(teamId, roundId)
+                        selectedTab = Tab.Scores.ordinal
+                    },
+                )
+                Tab.Prizes -> PrizesScreen(
+                    state = state,
+                    viewModel = viewModel,
+                    onTeamClick = { teamId ->
+                        // Jump to the Scores screen with that team brought into view.
+                        viewModel.revealTeam(teamId, roundId = null)
                         selectedTab = Tab.Scores.ordinal
                     },
                 )
