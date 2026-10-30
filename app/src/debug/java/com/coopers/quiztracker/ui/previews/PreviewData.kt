@@ -45,4 +45,18 @@ internal object PreviewData {
     )
 
     val emptyState: QuizUiState = state(teams = emptyList())
+
+    /**
+     * A night with shared ranks: two teams tie at 2nd and two tie at 4th, so the
+     * board badges should read "=2" and "=4".
+     */
+    val tiedState: QuizUiState = state(
+        teams = listOf(
+            team(1, "Alpha", 3, 20, 10, 2),   // total 32
+            team(2, "Bravo", 4, 15, 10, 2),   // total 27, tied 2nd
+            team(3, "Charlie", 2, 15, 10, 2), // total 27, tied 2nd
+            team(4, "Delta", 3, 10, 10, 2),   // total 22, tied 4th
+            team(5, "Echo", 3, 10, 10, 2),    // total 22, tied 4th
+        ),
+    )
 }

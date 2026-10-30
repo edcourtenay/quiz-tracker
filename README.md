@@ -76,6 +76,8 @@ Each is a `SORT()` of the `Scores` table:
 - **Board** — switch between the four leaderboards (Rounds 1-4, Rounds 5-6,
   Wipeout, Final). The leader row is green, the best value is highlighted, and a
   Wipeout of 0 is shown in red — mirroring the sheet's conditional formatting.
+  When teams share a rank the badge is prefixed with `=` (e.g. `=2`), the usual
+  convention for a tie.
 - **Settings** — quiz name, entry fee per player, share results as CSV, clear all
   scores (keeps teams), delete all teams, and an About panel.
 

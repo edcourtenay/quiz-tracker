@@ -1,14 +1,16 @@
 package com.coopers.quiztracker.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -17,7 +19,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -27,6 +28,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -48,6 +50,8 @@ private data class BoardRow(
     val caption: String,
     val isLeader: Boolean,
     val isZeroWipeout: Boolean,
+    /** True when another team shares this rank. */
+    val isTied: Boolean = false,
 )
 
 @Composable
@@ -123,17 +127,22 @@ private fun LeaderboardRow(row: BoardRow) {
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Surface(
-                shape = CircleShape,
-                color = if (row.isLeader) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.surfaceVariant
-                },
-                modifier = Modifier.size(34.dp),
+            Box(
+                modifier = Modifier
+                    .defaultMinSize(minWidth = 34.dp, minHeight = 34.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (row.isLeader) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        },
+                    )
+                    .padding(horizontal = 6.dp),
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = row.rank?.toString() ?: "-",
+                    text = row.rankLabel(),
                     style = MaterialTheme.typography.titleMedium,
                     color = if (row.isLeader) {
                         MaterialTheme.colorScheme.onPrimary
@@ -141,7 +150,7 @@ private fun LeaderboardRow(row: BoardRow) {
                         MaterialTheme.colorScheme.onSurfaceVariant
                     },
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 5.dp),
+                    maxLines = 1,
                 )
             }
 
@@ -172,39 +181,61 @@ private fun LeaderboardRow(row: BoardRow) {
     }
 }
 
-private fun buildRows(board: Board, scores: List<TeamScore>): List<BoardRow> = when (board) {
-    Board.Rounds14 -> scores
-        .filter { it.team.rounds1to4 != null }
-        .sortedWith(compareBy({ it.rankRounds1to4 ?: Int.MAX_VALUE }, { it.team.createdAt }))
-        .map { it.toRow(it.team.rounds1to4, it.rankRounds1to4, "Rounds 1-4") }
+private fun buildRows(board: Board, scores: List<TeamScore>): List<BoardRow> {
+    val rows = when (board) {
+        Board.Rounds14 -> scores
+            .filter { it.team.rounds1to4 != null }
+            .sortedWith(compareBy({ it.rankRounds1to4 ?: Int.MAX_VALUE }, { it.team.createdAt }))
+            .map { it.toRow(it.team.rounds1to4, it.rankRounds1to4, "Rounds 1-4") }
 
-    Board.Rounds56 -> scores
-        .filter { it.subtotal != null }
-        .sortedWith(compareBy({ it.rankRounds5to6 ?: Int.MAX_VALUE }, { it.team.createdAt }))
-        .map { it.toRow(it.subtotal, it.rankRounds5to6, "Rounds 5-6: ${formatScore(it.team.rounds5to6)}") }
+        Board.Rounds56 -> scores
+            .filter { it.subtotal != null }
+            .sortedWith(compareBy({ it.rankRounds5to6 ?: Int.MAX_VALUE }, { it.team.createdAt }))
+            .map { it.toRow(it.subtotal, it.rankRounds5to6, "Rounds 5-6: ${formatScore(it.team.rounds5to6)}") }
 
-    Board.Wipeout -> scores
-        .filter { it.team.wipeout != null }
-        .sortedWith(compareBy({ it.rankWipeout ?: Int.MAX_VALUE }, { it.team.createdAt }))
-        .map {
-            it.toRow(
-                value = it.team.wipeout,
-                rank = it.rankWipeout,
-                caption = "Subtotal: ${formatScore(it.subtotal)}",
-                isZeroWipeout = it.team.wipeout == 0,
-            )
-        }
+        Board.Wipeout -> scores
+            .filter { it.team.wipeout != null }
+            .sortedWith(compareBy({ it.rankWipeout ?: Int.MAX_VALUE }, { it.team.createdAt }))
+            .map {
+                it.toRow(
+                    value = it.team.wipeout,
+                    rank = it.rankWipeout,
+                    caption = "Subtotal: ${formatScore(it.subtotal)}",
+                    isZeroWipeout = it.team.wipeout == 0,
+                )
+            }
 
-    Board.Final -> scores
-        .filter { it.total != null }
-        .sortedWith(compareBy({ it.rankFinal ?: Int.MAX_VALUE }, { it.team.createdAt }))
-        .map {
-            it.toRow(
-                value = it.total,
-                rank = it.rankFinal,
-                caption = "Subtotal ${formatScore(it.subtotal)} + Wipeout ${formatScore(it.team.wipeout)}",
-            )
-        }
+        Board.Final -> scores
+            .filter { it.total != null }
+            .sortedWith(compareBy({ it.rankFinal ?: Int.MAX_VALUE }, { it.team.createdAt }))
+            .map {
+                it.toRow(
+                    value = it.total,
+                    rank = it.rankFinal,
+                    caption = "Subtotal ${formatScore(it.subtotal)} + Wipeout ${formatScore(it.team.wipeout)}",
+                )
+            }
+    }
+    return rows.withTieFlags()
+}
+
+/**
+ * Competition ranks repeat on a tie (1, 2, 2, 4). Flag every row whose rank is
+ * shared by more than one team so its badge can render as "=2".
+ */
+private fun List<BoardRow>.withTieFlags(): List<BoardRow> {
+    val counts = mapNotNull { it.rank }.groupingBy { it }.eachCount()
+    return map { row ->
+        val rank = row.rank
+        row.copy(isTied = rank != null && (counts[rank] ?: 0) > 1)
+    }
+}
+
+/** "3" normally, "=3" when the rank is shared, "-" when unranked. */
+private fun BoardRow.rankLabel(): String = when {
+    rank == null -> "-"
+    isTied -> "=$rank"
+    else -> rank.toString()
 }
 
 private fun TeamScore.toRow(

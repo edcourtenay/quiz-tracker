@@ -90,6 +90,22 @@ private fun BoardFinalPreview() {
     }
 }
 
+@Preview(name = "Board – tied ranks (Rounds 1-4)", showBackground = true, heightDp = 700)
+@Composable
+private fun BoardTiedRounds14Preview() {
+    QuizTrackerTheme {
+        LeaderboardScreen(state = PreviewData.tiedState, initialBoardIndex = 0)
+    }
+}
+
+@Preview(name = "Board – tied ranks (Final)", showBackground = true, heightDp = 700)
+@Composable
+private fun BoardTiedFinalPreview() {
+    QuizTrackerTheme {
+        LeaderboardScreen(state = PreviewData.tiedState, initialBoardIndex = 3)
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Settings screen
 // ---------------------------------------------------------------------------
